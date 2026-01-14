@@ -30,61 +30,100 @@
 
 #include "IRBBLabelPass.hh"
 
+// IRBBLabelPass::run - Main pass execution function.
+//
+// Processes the entire LLVM module to assign unique IDs to all basic blocks,
+// attach metadata, and export collected information to CSV.
+//
+// Algorithm:
+//   1. Initialize counters for functions and basic blocks
+//   2. Iterate through all functions in the module
+//      - Skip function declarations (F.isDeclaration())
+//      - For each basic block:
+//        a. Assign globally unique ID
+//        b. Attach !bb.id metadata to terminator instruction
+//        c. Collect basic block statistics
+//   3. Write collected data to CSV file
+//
+// Args:
+//   M: LLVM Module to instrument
+//   AM: Module analysis manager (unused)
+//
+// Returns:
+//   PreservedAnalyses::all() - Metadata doesn't invalidate analyses
 PreservedAnalyses IRBBLabelPass::run(Module &M, ModuleAnalysisManager &) {
     LLVMContext &C = M.getContext();
-    uint64_t function_counter = 0;
-    uint64_t basic_block_global_counter = 0;
-    bb_info_list_.clear();
+    
+    // Initialize counters for assigning unique IDs
+    uint64_t function_counter = 0;            // Function ID counter
+    uint64_t basic_block_global_counter = 0;  // Global BB ID counter
+    bb_info_list_.clear();  // Clear any existing data from previous runs
 
+    // Iterate through all functions in the module
     for (Function &F : M) {
-        if (F.isDeclaration()) continue; // skip function declarations
+        // Skip function declarations (external functions without definitions)
+        // isDeclaration() returns true for functions like printf, malloc, etc.
+        if (F.isDeclaration()) continue;
 
+        // Process each basic block in the function
         for (BasicBlock &BB : F) {
-            // Create unique BB ID
+            // Assign globally unique basic block ID and increment counter
             uint64_t bb_id = basic_block_global_counter++;
 
-            // Set metadata on the terminator instruction
+            // Attach !bb.id metadata to the terminator instruction
+            // Terminator is the last instruction in a BB (br, ret, switch, etc.)
             Instruction *T = BB.getTerminator();
             if (T) {
+                // Create metadata node: !bb.id !N where !N = !{"<bb_id>"}
+                // The ID is stored as a string within an MDString node
                 MDNode *N = MDNode::get(C, MDString::get(C, std::to_string(bb_id)));
                 T->setMetadata(kBbIdKey, N);
             } else {
-                // Print warning if no terminator
+                // Warn if basic block has no terminator (malformed IR)
+                // This should never happen with valid LLVM IR
                 errs() << "Warning: BasicBlock " << BB.getName()
                         << " in function " << F.getName()
                         << " has no terminator instruction.\n";
             }
 
-            // Collect BB info
+            // Collect basic block information for CSV export
             BasicBlockInfo bb_info;
-            bb_info.function_name = F.getName().str();
-            bb_info.function_id = function_counter;
-            bb_info.basic_block_name = BB.getName().str();
-            bb_info.basic_block_inst_count = BB.size();
-            bb_info.basic_block_id = bb_id;
+            bb_info.function_name = F.getName().str();  // Function name (mangled for C++)
+            bb_info.function_id = function_counter;      // Current function's ID
+            bb_info.basic_block_name = BB.getName().str();  // BB label ("" for entry block)
+            bb_info.basic_block_inst_count = BB.size();  // Number of instructions
+            bb_info.basic_block_id = bb_id;              // Globally unique BB ID
 
             bb_info_list_.push_back(bb_info);
         }
+        // Increment function counter after processing all BBs in this function
         function_counter++;
     }
 
-    // Output collected BB info into a CSV file
+    // Export collected basic block information to CSV file
+    // File path is specified in options_[0].option_value (default: "bb_info.csv")
     std::error_code EC;
     raw_fd_ostream csv_file(options_[0].option_value, EC, sys::fs::OF_Text);
     if (EC) {
-        errs() << "Error opening file " << options_[0].option_value << ": " << EC.message() << "\n";
+        errs() << "Error opening file " << options_[0].option_value
+               << ": " << EC.message() << "\n";
         return PreservedAnalyses::all();
     }
-    // Write CSV header
+    
+    // Write CSV header row
     csv_file << "FunctionName,FunctionID,BasicBlockName,BasicBlockInstCount,BasicBlockID\n";
-    // Write BB info
+    
+    // Write data rows (one per basic block)
     for (const auto &bb_info : bb_info_list_) {
         csv_file << bb_info.function_name << ","
                 << bb_info.function_id << ","
-                << bb_info.basic_block_name << ","
+                << bb_info.basic_block_name << ","  // Empty string for entry block
                 << bb_info.basic_block_inst_count << ","
                 << bb_info.basic_block_id << "\n";
     }
     csv_file.close();
+    
+    // Return PreservedAnalyses::all() because metadata addition doesn't
+    // invalidate any existing analyses (CFG, dominators, etc. remain valid)
     return PreservedAnalyses::all();
 }
