@@ -49,20 +49,3 @@ add_llvm_pass_plugin(NuggetPasses
 target_include_directories(NuggetPasses PRIVATE ${LLVM_INCLUDE_DIRS})
 target_compile_definitions(NuggetPasses PRIVATE ${LLVM_DEFINITIONS})
 target_compile_features(NuggetPasses PRIVATE cxx_std_17)
-
-# ---- Feature-detect PassBuilder parameter helper APIs (newer LLVM) ----
-include(CheckCXXSourceCompiles)
-set(CMAKE_REQUIRED_INCLUDES "${LLVM_INCLUDE_DIRS}")
-
-check_cxx_source_compiles("
-  #include <llvm/Passes/PassBuilder.h>
-  int main() {
-    (void)&llvm::PassBuilder::checkParametrizedPassName;
-    (void)&llvm::PassBuilder::parsePassParameters;
-    return 0;
-  }
-" HAVE_LLVM_PASSBUILDER_PARAM_HELPERS)
-
-if (HAVE_LLVM_PASSBUILDER_PARAM_HELPERS)
-  target_compile_definitions(NuggetPasses PRIVATE HAVE_LLVM_PASSBUILDER_PARAM_HELPERS=1)
-endif()

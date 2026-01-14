@@ -1,3 +1,69 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2026 Zhantong Qiu
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# 1. Redistributions of source code must retain the above copyright notice, this
+#    list of conditions and the following disclaimer.
+#
+# 2. Redistributions in binary form must reproduce the above copyright notice,
+#    this list of conditions and the following disclaimer in the documentation
+#    and/or other materials provided with the distribution.
+#
+# 3. Neither the name of the copyright holder nor the names of its
+#    contributors may be used to endorse or promote products derived
+#    from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+# Test 4: Mixed C++ and Fortran (multi-language module)
+#
+# This test validates the IRBBLabel pass on merged multi-language LLVM modules:
+#   - C++ code with mangled names and complex features
+#   - Fortran subroutines with bind(C) for C interoperability
+#   - Both languages compiled to separate IR files
+#   - Linked together using llvm-link into single module
+#   - Pass processes the merged module
+#
+# Why this test matters:
+#   - Real HPC codes mix C++/Fortran extensively
+#   - Pass must handle both C++ mangling and Fortran conventions
+#   - Tests llvm-link compatibility (merged modules)
+#   - Verifies pass doesn't crash on multi-language IR
+#
+# Compilation pipeline:
+#   1. C++ source -> clang++ -> cpp.ll
+#   2. Fortran source -> flang-new -> fortran.ll  
+#   3. llvm-link cpp.ll fortran.ll -> merged.bc
+#   4. opt + IRBBLabel pass on merged.bc -> instrumented.bc
+#   5. llvm-dis -> instrumented.ll (readable)
+#
+# Fortran interoperability:
+#   - Fortran uses bind(C) to export functions with C-compatible names
+#   - C++ uses extern "C" to call Fortran functions
+#   - No name mangling on Fortran functions (fortran_add, fortran_factorial)
+#
+# Expected CSV output:
+#   - C++ functions with mangled names (_ZN...)
+#   - Fortran functions with bind(C) names (fortran_add, fortran_factorial)
+#   - All basic blocks from both languages
+#
+# Tests registered:
+#   1. test4_mixed_csv_exists
+#   2. test4_mixed_csv_has_content
+#   3. test4_mixed_metadata_validation
+
 cmake_minimum_required(VERSION 3.20)
 
 # ============================================================================
@@ -50,9 +116,9 @@ add_custom_command(
 add_custom_command(
     OUTPUT ${BC_FILE}
     COMMAND ${OPT_EXECUTABLE} -load-pass-plugin=${PASS_PLUGIN}
-            -passes="ir-bb-label" ${LINKED_BC} -o ${BC_FILE}
+            -passes="ir-bb-label-pass" ${LINKED_BC} -o ${BC_FILE}
     DEPENDS ${LINKED_BC} ${PASS_PLUGIN}
-    COMMENT "Running ir-bb-label pass on combined C++/Fortran module"
+    COMMENT "Running ir-bb-label-pass on combined C++/Fortran module"
     WORKING_DIRECTORY ${OUTPUT_DIR}
 )
 
@@ -70,18 +136,11 @@ add_custom_target(test4_mixed_target ALL DEPENDS ${READABLE_LL})
 
 # Add tests
 add_test(
-    NAME test4_mixed
-    COMMAND ${CMAKE_COMMAND} -E echo "Checking test4_mixed results..."
-    WORKING_DIRECTORY ${OUTPUT_DIR}
-)
-
-add_test(
     NAME test4_mixed_csv_exists
     COMMAND ${CMAKE_COMMAND} -E cat ${CSV_FILE}
     WORKING_DIRECTORY ${OUTPUT_DIR}
 )
 set_tests_properties(test4_mixed_csv_exists PROPERTIES 
-    DEPENDS test4_mixed
     PASS_REGULAR_EXPRESSION "FunctionName,FunctionID,BasicBlockName"
 )
 
@@ -93,3 +152,11 @@ add_test(
     WORKING_DIRECTORY ${OUTPUT_DIR}
 )
 set_tests_properties(test4_mixed_csv_has_content PROPERTIES DEPENDS test4_mixed_csv_exists)
+add_test(
+    NAME test4_mixed_metadata_validation
+    COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../common/verify_metadata.py 
+            ${READABLE_LL} ${CSV_FILE}
+    WORKING_DIRECTORY ${OUTPUT_DIR}
+)
+set_tests_properties(test4_mixed_metadata_validation PROPERTIES 
+    DEPENDS test4_mixed_csv_has_content)

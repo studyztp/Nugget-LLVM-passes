@@ -38,9 +38,18 @@ extern "C" LLVM_ATTRIBUTE_WEAK PassPluginLibraryInfo llvmGetPassPluginInfo() {
             PB.registerPipelineParsingCallback(
                 [](StringRef Name, ModulePassManager &MPM,
                    ArrayRef<PassBuilder::PipelineElement>) {
-                    if (Name == "ir-bb-label") {
-                        MPM.addPass(IRBBLabelPass());
+                    DEBUG_PRINT("Pipeline parsing callback called with Name='" << Name << "'");
+                    auto E = MatchParamPass(Name, "ir-bb-label-pass", IRBBLabelPassOptions);
+                    if (E) {
+                        MPM.addPass(IRBBLabelPass(*E));
                         return true;
+                    } else {
+                        std::string ErrorMsg = toString(E.takeError());
+                        // Only report errors if the name matched but parsing failed
+                        if (ErrorMsg.find("name not matched") == std::string::npos) {
+                            errs() << "ir-bb-label-pass param parse error: " << ErrorMsg << "\n";
+                            return false;
+                        }
                     }
                     return false;
                 });

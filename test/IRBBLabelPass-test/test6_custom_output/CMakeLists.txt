@@ -27,61 +27,73 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
-# Test 2: Dynamic libraries and edge cases
+# Test 6: Custom CSV output filename
 #
-# This test validates the IRBBLabel pass on complex edge cases:
-#   - Empty functions (no instructions)
-#   - External library calls (sqrt, malloc, strlen from libc/libm)
-#   - Function declarations without definitions (isDeclaration() check)
-#   - NULL pointer checks and early returns
-#   - Complex control flow with nested loops and conditionals
+# This test validates pass parameter parsing using LLVM's new pass manager syntax:
+#   -passes="ir-bb-label-pass<output_csv=custom_name.csv>"
 #
 # Why this test matters:
-#   - Pass must handle empty functions without crashing
-#   - External functions (isDeclaration() == true) should be skipped
-#   - Dynamic allocation and string handling create interesting BB structures
-#   - Tests robustness of pass on real-world code patterns
+#   - Verifies pass option parsing works correctly
+#   - Tests parameter passing via new pass manager
+#   - Ensures custom CSV filename is used instead of default
+#   - Validates pass follows LLVM parameter conventions
 #
-# Special linker flags:
-#   -lm: Link against math library for sqrt() function
+# Parameter syntax:
+#   Pass name: ir-bb-label-pass
+#   Option format: <key=value>
+#   Default: output_csv=bb_info.csv
+#   This test: output_csv=my_custom_bb_output.csv
+#
+# CMake escaping:
+#   Angle brackets must be escaped to prevent shell interpretation:
+#   -passes="ir-bb-label-pass\<output_csv=...\>"
+#
+# Expected behavior:
+#   - my_custom_bb_output.csv is created (not bb_info.csv)
+#   - File contains standard CSV format
+#   - All basic blocks are labeled correctly
 #
 # Tests registered:
-#   1. test2_dynamic_lib_csv_exists
-#   2. test2_dynamic_lib_csv_has_content
-#   3. test2_dynamic_lib_metadata_validation
+#   1. test6_custom_csv_exists (checks custom filename)
+#   2. test6_custom_csv_has_content
+#   3. test6_custom_metadata_validation
 
 cmake_minimum_required(VERSION 3.20)
 
 # ============================================================================
-# Test 2: Dynamic library calls
+# Test 6: Custom output CSV filename
 # ============================================================================
 
 set(OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR})
 file(MAKE_DIRECTORY ${OUTPUT_DIR})
 
-set(SOURCE_FILE ${CMAKE_CURRENT_SOURCE_DIR}/test2_dynamic_lib.c)
-set(LL_FILE ${OUTPUT_DIR}/test2_dynamic_lib.ll)
-set(BC_FILE ${OUTPUT_DIR}/test2_dynamic_lib_instrumented.bc)
-set(CSV_FILE ${OUTPUT_DIR}/bb_info.csv)
-set(READABLE_LL ${OUTPUT_DIR}/test2_dynamic_lib_instrumented.ll)
+set(SOURCE_FILE ${CMAKE_CURRENT_SOURCE_DIR}/test6_custom_output.c)
+set(LL_FILE ${OUTPUT_DIR}/test6_custom_output.ll)
+set(BC_FILE ${OUTPUT_DIR}/test6_custom_output_instrumented.bc)
+set(CUSTOM_CSV_FILE ${OUTPUT_DIR}/my_custom_bb_output.csv)
+set(READABLE_LL ${OUTPUT_DIR}/test6_custom_output_instrumented.ll)
 
 # Step 1: Compile source to LLVM IR
 add_custom_command(
     OUTPUT ${LL_FILE}
     COMMAND ${CLANG_EXECUTABLE} -O0 -Xclang -disable-O0-optnone -S -emit-llvm 
-            ${SOURCE_FILE} -o ${LL_FILE} -lm
+            ${SOURCE_FILE} -o ${LL_FILE}
     DEPENDS ${SOURCE_FILE}
-    COMMENT "Compiling test2_dynamic_lib.c to LLVM IR"
+    COMMENT "Compiling test6_custom_output.c to LLVM IR"
     WORKING_DIRECTORY ${OUTPUT_DIR}
 )
 
-# Step 2: Run the pass
+# Step 2: Run the pass with custom output_csv parameter
+# Use escaped angle brackets to prevent shell interpretation
 add_custom_command(
     OUTPUT ${BC_FILE}
-    COMMAND ${OPT_EXECUTABLE} -load-pass-plugin=${PASS_PLUGIN}
-            -passes="ir-bb-label-pass" ${LL_FILE} -o ${BC_FILE}
+    COMMAND ${OPT_EXECUTABLE}
+            -load-pass-plugin=${PASS_PLUGIN}
+            -passes "ir-bb-label-pass\\<output_csv=my_custom_bb_output.csv\\>"
+            ${LL_FILE}
+            -o ${BC_FILE}
     DEPENDS ${LL_FILE} ${PASS_PLUGIN}
-    COMMENT "Running ir-bb-label-pass on test2_dynamic_lib"
+    COMMENT "Running ir-bb-label-pass with custom output CSV on test6"
     WORKING_DIRECTORY ${OUTPUT_DIR}
 )
 
@@ -90,36 +102,36 @@ add_custom_command(
     OUTPUT ${READABLE_LL}
     COMMAND ${LLVM_DIS_EXECUTABLE} ${BC_FILE} -o ${READABLE_LL}
     DEPENDS ${BC_FILE}
-    COMMENT "Converting test2_dynamic_lib bitcode to readable IR"
+    COMMENT "Converting test6_custom_output bitcode to readable IR"
     WORKING_DIRECTORY ${OUTPUT_DIR}
 )
 
 # Create target
-add_custom_target(test2_dynamic_lib_target ALL DEPENDS ${READABLE_LL})
+add_custom_target(test6_custom_output_target ALL DEPENDS ${READABLE_LL})
 
 # Add tests
 add_test(
-    NAME test2_dynamic_lib_csv_exists
-    COMMAND ${CMAKE_COMMAND} -E cat ${CSV_FILE}
+    NAME test6_custom_csv_exists
+    COMMAND ${CMAKE_COMMAND} -E cat ${CUSTOM_CSV_FILE}
     WORKING_DIRECTORY ${OUTPUT_DIR}
 )
-set_tests_properties(test2_dynamic_lib_csv_exists PROPERTIES 
+set_tests_properties(test6_custom_csv_exists PROPERTIES 
     PASS_REGULAR_EXPRESSION "FunctionName,FunctionID,BasicBlockName"
 )
 
 add_test(
-    NAME test2_dynamic_lib_csv_has_content
+    NAME test6_custom_csv_has_content
     COMMAND ${CMAKE_COMMAND} 
-            -DCSV_FILE=${CSV_FILE}
+            -DCSV_FILE=${CUSTOM_CSV_FILE}
             -P ${CMAKE_CURRENT_SOURCE_DIR}/../common/verify_csv.cmake
     WORKING_DIRECTORY ${OUTPUT_DIR}
 )
-set_tests_properties(test2_dynamic_lib_csv_has_content PROPERTIES DEPENDS test2_dynamic_lib_csv_exists)
+set_tests_properties(test6_custom_csv_has_content PROPERTIES DEPENDS test6_custom_csv_exists)
 add_test(
-    NAME test2_dynamic_lib_metadata_validation
+    NAME test6_custom_metadata_validation
     COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../common/verify_metadata.py 
-            ${READABLE_LL} ${CSV_FILE}
+            ${READABLE_LL} ${CUSTOM_CSV_FILE}
     WORKING_DIRECTORY ${OUTPUT_DIR}
 )
-set_tests_properties(test2_dynamic_lib_metadata_validation PROPERTIES 
-    DEPENDS test2_dynamic_lib_csv_has_content)
+set_tests_properties(test6_custom_metadata_validation PROPERTIES 
+    DEPENDS test6_custom_csv_has_content)

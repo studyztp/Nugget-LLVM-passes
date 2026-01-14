@@ -31,59 +31,60 @@
 #include "IRBBLabelPass.hh"
 
 PreservedAnalyses IRBBLabelPass::run(Module &M, ModuleAnalysisManager &) {
-        LLVMContext &C = M.getContext();
-        uint64_t functionCounter = 0;
-        uint64_t basicBlockGlobalCounter = 0;
-    
-        for (Function &F : M) {
-            if (F.isDeclaration()) continue; // skip function declarations
-    
-            for (BasicBlock &BB : F) {
-                // Create unique BB ID
-                uint64_t bbId = basicBlockGlobalCounter++;
-    
-                // Set metadata on the terminator instruction
-                Instruction *T = BB.getTerminator();
-                if (T) {
-                    MDNode *N = MDNode::get(C, MDString::get(C, std::to_string(bbId)));
-                    T->setMetadata(BBIDKey, N);
-                } else {
-                    // Print warning if no terminator
-                    errs() << "Warning: BasicBlock " << BB.getName()
-                           << " in function " << F.getName()
-                           << " has no terminator instruction.\n";
-                }
-    
-                // Collect BB info
-                basicBlockInfo bbInfo;
-                bbInfo.functionName = F.getName().str();
-                bbInfo.functionId = functionCounter;
-                bbInfo.basicBlockName = BB.getName().str();
-                bbInfo.basicBlockInstCount = BB.size();
-                bbInfo.basicBlockId = bbId;
-    
-                bbInfoList.push_back(bbInfo);
-            }
-            functionCounter++;
-        }
+    LLVMContext &C = M.getContext();
+    uint64_t function_counter = 0;
+    uint64_t basic_block_global_counter = 0;
+    bb_info_list_.clear();
 
-        // Output collected BB info into a CSV file
-        std::error_code EC;
-        raw_fd_ostream csvFile("bb_info.csv", EC, sys::fs::OF_Text);
-        if (EC) {
-            errs() << "Error opening file bb_info.csv: " << EC.message() << "\n";
-            return PreservedAnalyses::all();
+    for (Function &F : M) {
+        if (F.isDeclaration()) continue; // skip function declarations
+
+        for (BasicBlock &BB : F) {
+            // Create unique BB ID
+            uint64_t bb_id = basic_block_global_counter++;
+
+            // Set metadata on the terminator instruction
+            Instruction *T = BB.getTerminator();
+            if (T) {
+                MDNode *N = MDNode::get(C, MDString::get(C, std::to_string(bb_id)));
+                T->setMetadata(kBbIdKey, N);
+            } else {
+                // Print warning if no terminator
+                errs() << "Warning: BasicBlock " << BB.getName()
+                        << " in function " << F.getName()
+                        << " has no terminator instruction.\n";
+            }
+
+            // Collect BB info
+            BasicBlockInfo bb_info;
+            bb_info.function_name = F.getName().str();
+            bb_info.function_id = function_counter;
+            bb_info.basic_block_name = BB.getName().str();
+            bb_info.basic_block_inst_count = BB.size();
+            bb_info.basic_block_id = bb_id;
+
+            bb_info_list_.push_back(bb_info);
         }
-        // Write CSV header
-        csvFile << "FunctionName,FunctionID,BasicBlockName,BasicBlockInstCount,BasicBlockID\n";
-        // Write BB info
-        for (const auto &bbInfo : bbInfoList) {
-            csvFile << bbInfo.functionName << ","
-                    << bbInfo.functionId << ","
-                    << bbInfo.basicBlockName << ","
-                    << bbInfo.basicBlockInstCount << ","
-                    << bbInfo.basicBlockId << "\n";
-        }
-        csvFile.close();
+        function_counter++;
+    }
+
+    // Output collected BB info into a CSV file
+    std::error_code EC;
+    raw_fd_ostream csv_file(options_[0].option_value, EC, sys::fs::OF_Text);
+    if (EC) {
+        errs() << "Error opening file " << options_[0].option_value << ": " << EC.message() << "\n";
         return PreservedAnalyses::all();
+    }
+    // Write CSV header
+    csv_file << "FunctionName,FunctionID,BasicBlockName,BasicBlockInstCount,BasicBlockID\n";
+    // Write BB info
+    for (const auto &bb_info : bb_info_list_) {
+        csv_file << bb_info.function_name << ","
+                << bb_info.function_id << ","
+                << bb_info.basic_block_name << ","
+                << bb_info.basic_block_inst_count << ","
+                << bb_info.basic_block_id << "\n";
+    }
+    csv_file.close();
+    return PreservedAnalyses::all();
 }

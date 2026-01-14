@@ -13,7 +13,7 @@ cmake --build build
 cd build && ctest --output-on-failure
 ```
 
-**Result**: ✅ All 23 tests PASSING
+**Result**: ✅ All 27 tests PASSING
 
 ---
 
@@ -21,12 +21,13 @@ cd build && ctest --output-on-failure
 
 This test suite validates the **IRBBLabelPass** LLVM plugin, which labels all basic blocks with unique metadata IDs and exports them to CSV format.
 
-The suite includes 5 comprehensive test cases covering:
-- Simple C code
-- Dynamic library dependencies
-- C++ language features
-- Multi-language interoperability (C++ + Fortran)
-- Optimization pipeline comparison
+The suite includes 6 comprehensive test cases covering:
+- **Test 1**: Simple C code with basic functions
+- **Test 2**: Dynamic library dependencies and external calls
+- **Test 3**: C++ language features (templates, overloading, lambdas)
+- **Test 4**: Multi-language interoperability (C++ + Fortran)
+- **Test 5**: Optimization pipeline comparison (direct vs pipelined)
+- **Test 6**: Custom parameter override for output filename
 
 ---
 
@@ -34,48 +35,63 @@ The suite includes 5 comprehensive test cases covering:
 
 ### Test 1: Simple C Code ✓
 Basic functionality test with 3 simple functions
-- **Output**: 6 labeled basic blocks
-- **Status**: PASSING (3/3)
+- **Functions**: `fibonacci()`, `add()`, `multiply()`
+- **Output**: 6 labeled basic blocks in `bb_info.csv`
+- **Status**: PASSING (4/4)
+- **Validations**: CSV format, content, and IR metadata annotations
 
 ### Test 2: Dynamic Library Calls ✓
 Tests external library dependencies (math functions)
-- **Features**: Math library calls (-lm), multiple function types
-- **Status**: PASSING (3/3)
+- **Features**: Math library calls (-lm), multiple function types, extern declarations
+- **Status**: PASSING (4/4)
+- **Validations**: CSV format, content, and IR metadata annotations
 
 ### Test 3: C++ Static Code ✓
 Tests C++ language features
-- **Features**: Function overloading, templates, lambdas, name mangling
-- **Status**: PASSING (3/3)
+- **Features**: Function overloading, templates, lambdas, name mangling, STL usage
+- **Status**: PASSING (4/4)
+- **Validations**: CSV format, content, and IR metadata annotations (handles mangled names)
 
 ### Test 4: Mixed C++/Fortran ✓
 Tests multi-language interoperability
-- **Features**: llvm-link module linking, language interop, symbol resolution
-- **Status**: PASSING (3/3)
+- **Features**: llvm-link module linking, language interop, symbol resolution, C++/Fortran interface
+- **Status**: PASSING (4/4)
+- **Validations**: CSV format, content, and IR metadata annotations across languages
 
 ### Test 5: Optimization Pipeline Comparison ✓
 Verifies optimization equivalence between two compilation pipelines
-- **Pipeline 1**: Direct `clang -O2` compilation
-- **Pipeline 2**: Multi-step: IR → opt -O2 → pass labeling → llc -O2 → linking
-- **Result**: Both pipelines produce identical performance (29ms avg, 0% difference)
-- **Status**: PASSING (10/10)
+- **Pipeline 1 (Direct)**: `clang -O2` compilation
+- **Pipeline 2 (Pipelined)**: IR → `opt -O2` → pass labeling → `llc -O2` → linking
+- **Performance Result**: -3% difference (within 5% tolerance)
+- **Status**: PASSING (11/11)
 - **Verified**:
   - opt -O2 passes captured (630 lines)
   - llc -O2 passes captured (704 lines)
   - Both binaries execute successfully
-  - Performance comparison (within 10% tolerance)
+  - Comparison report generated with detailed statistics
+  - IR metadata validation on optimized code (handles complex BB names)
+
+### Test 6: Custom Output Filename ✓
+Tests parameter override for custom CSV output filename
+- **Features**: Pass parameter parsing, option override, custom naming
+- **Command**: `-passes="ir-bb-label-pass<output_csv=my_custom_bb_output.csv>"`
+- **Verification**: CSV file created with custom name instead of default `bb_info.csv`
+- **Status**: PASSING (4/4)
+- **Validations**: CSV format, content, and IR metadata annotations with custom filename
 
 ---
 
 ## Test Results
 
-| Test | CSV Generated | Format Valid | Content Valid | Pass |
-|------|---------------|--------------|---------------|------|
-| test1_simple | ✓ | ✓ | ✓ | ✓ (3/3) |
-| test2_dynamic_lib | ✓ | ✓ | ✓ | ✓ (3/3) |
-| test3_cpp_static | ✓ | ✓ | ✓ | ✓ (3/3) |
-| test4_mixed | ✓ | ✓ | ✓ | ✓ (3/3) |
-| test5_optimization | ✓ | ✓ | ✓ | ✓ (10/10) |
-| **Total** | **5/5** | **5/5** | **5/5** | **23/23** |
+| Test | CSV Generated | Format Valid | Content Valid | Metadata Valid | Pass |
+|------|---------------|--------------|---------------|----------------|------|
+| test1_simple | ✓ | ✓ | ✓ | ✓ | ✓ (4/4) |
+| test2_dynamic_lib | ✓ | ✓ | ✓ | ✓ | ✓ (4/4) |
+| test3_cpp_static | ✓ | ✓ | ✓ | ✓ | ✓ (4/4) |
+| test4_mixed | ✓ | ✓ | ✓ | ✓ | ✓ (4/4) |
+| test5_optimization | ✓ | ✓ | ✓ | ✓ | ✓ (11/11) |
+| test6_custom_output | ✓ | ✓ | ✓ | ✓ | ✓ (4/4) |
+| **Total** | **6/6** | **6/6** | **6/6** | **6/6** | **27/27** |
 
 ---
 
@@ -83,8 +99,8 @@ Verifies optimization equivalence between two compilation pipelines
 
 Each test generates:
 - `bb_info.csv` - Basic block metadata in CSV format
-- `*.ll` - Readable LLVM IR with metadata
-- `*.bc` - Binary LLVM bitcode
+- `*_instrumented.ll` - Readable LLVM IR with `!bb.id` metadata annotations
+- `*_instrumented.bc` - Binary LLVM bitcode with metadata
 
 Test 5 also generates:
 - `test5_direct` - Direct compilation binary
@@ -180,6 +196,30 @@ Difference:                         0 ms (0%)
 ✓ opt -O2 passes: 630 lines captured
 ✓ llc -O2 passes: 704 lines captured
 ```
+
+---
+
+## Debugging
+
+The pass includes conditional debug output controlled via the `DEBUG_PRINT` macro:
+
+**Enable debug output** (compile with `-DDEBUG`):
+```bash
+cd pass && rm -rf build
+cmake -S . -B build -DCMAKE_CXX_FLAGS="-DDEBUG"
+cmake --build build
+```
+
+Then run tests to see detailed debug information about parameter parsing and pass execution.
+
+**Disable debug output** (default):
+```bash
+cd pass && rm -rf build
+cmake -S . -B build
+cmake --build build
+```
+
+This produces clean output without debug messages.
 
 ---
 

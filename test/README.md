@@ -12,7 +12,8 @@ test/
     ├── STRUCTURE.md                   # Architecture documentation
     ├── CMakeLists.txt                 # Build configuration
     ├── common/                        # Shared test utilities
-    │   └── verify_csv.cmake           # CSV validation script
+    │   ├── verify_csv.cmake           # CSV validation script
+    │   └── verify_metadata.py         # IR metadata validation script
     ├── test1_simple/                  # Test case 1: Basic C code
     ├── test2_dynamic_lib/             # Test case 2: Dynamic libraries
     ├── test3_cpp_static/              # Test case 3: C++ features
@@ -41,19 +42,20 @@ cmake --build build
 cd build && ctest --output-on-failure
 ```
 
-**Result**: ✅ All 16 tests PASSING
+**Result**: ✅ All 27 tests PASSING
 
 ## Available Test Suites
 
 | Pass | Status | Location | Tests |
 |------|--------|----------|-------|
-| **IRBBLabel** | ✅ Active | `IRBBLabelPass-test/` | 5 cases, 16 tests |
+| **IRBBLabel** | ✅ Active | `IRBBLabelPass-test/` | 6 cases, 27 tests |
 
 ## Test Suite Features
 
 Each test suite typically includes:
 - **Multiple test cases** covering different code scenarios
 - **CSV output validation** for structured results
+- **IR metadata validation** ensuring annotations match CSV
 - **Build integration** with CMake
 - **Automated testing** with ctest framework
 - **Documentation** with architecture guides
@@ -90,4 +92,4 @@ cp -r IRBBLabelPass-test/* NewPass-test/
 
 ## License
 
-See main LLVM project for licensing information.
+See [LICENSE](../LICENSE) file in the parent directory for BSD 3-Clause licensing information.

@@ -1,3 +1,4 @@
 **/build
 add_copyright_headers.sh
 COPYRIGHT_HEADERS.md
+**/__pycache__/

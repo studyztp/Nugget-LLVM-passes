@@ -1,3 +1,83 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2026 Zhantong Qiu
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# 1. Redistributions of source code must retain the above copyright notice, this
+#    list of conditions and the following disclaimer.
+#
+# 2. Redistributions in binary form must reproduce the above copyright notice,
+#    this list of conditions and the following disclaimer in the documentation
+#    and/or other materials provided with the distribution.
+#
+# 3. Neither the name of the copyright holder nor the names of its
+#    contributors may be used to endorse or promote products derived
+#    from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+# Test 5: Optimization Pipeline Comparison
+#
+# This test compares two compilation pipelines to verify the IRBBLabel pass
+# works correctly with optimized code and measures instrumentation impact:
+#
+# Pipeline 1 (Direct):
+#   source.c -> clang -O2 -> binary (baseline)
+#   Captures: Pass list from clang -O2
+#
+# Pipeline 2 (Labeled):
+#   source.c -> clang -O0 -> unopt.ll
+#           -> opt -O2 -> opt.ll
+#           -> opt + IRBBLabel pass -> labeled.bc
+#           -> llc -O2 -> object file
+#           -> clang (link) -> binary
+#   Captures: Pass lists from opt -O2 and llc -O2
+#
+# Why this test matters:
+#   - Optimizations (-O2) drastically change BB structure
+#   - Loop unrolling, inlining, vectorization create complex BBs
+#   - Optimized BB names include .lr.ph, ._crit_edge, .unr-lcssa, etc.
+#   - Pass must handle all optimization artifacts
+#   - Real-world usage will instrument optimized production code
+#   - Measures performance overhead of instrumentation
+#
+# Test components:
+#   1. Functional correctness: Both binaries produce same output
+#   2. Performance comparison: Overhead < 5%
+#   3. Pass tracking: Captures all optimization passes applied
+#   4. Metadata validation: IR metadata matches CSV after -O2
+#
+# Scripts used:
+#   - capture_passes.sh: Records passes from compiler/opt/llc
+#   - compare_passes.sh: Generates pass comparison report
+#   - compare_performance.sh: Runs binaries and compares timing
+#
+# Why llc -O2:
+#   - llc is the LLVM code generator (IR -> native code)
+#   - -O2 applies backend optimizations (instruction selection, register allocation)
+#   - Some basic blocks are created/modified during code generation
+#
+# Tests registered (11 total):
+#   1. test5_optimization_csv_exists
+#   2. test5_optimization_binaries_exist
+#   3-5. test5_*_passes_captured (direct/opt/llc)
+#   6-7. test5_*_passes_nonempty (verify pass files have content)
+#   8-9. test5_*_binary_runs (both binaries execute successfully)
+#   10. test5_performance_comparison (overhead check)
+#   11. test5_passes_comparison (pass analysis report)
+#   12. test5_metadata_validation (IR metadata vs CSV)
+
 cmake_minimum_required(VERSION 3.20)
 
 # ============================================================================
@@ -11,6 +91,7 @@ set(SOURCE_FILE ${CMAKE_CURRENT_SOURCE_DIR}/test5_optimization.c)
 
 # Pipeline 1: Direct compilation with -O2
 set(DIRECT_BIN ${OUTPUT_DIR}/test5_direct)
+set(DIRECT_PASSES_FILE ${OUTPUT_DIR}/direct_passes.txt)
 add_custom_command(
     OUTPUT ${DIRECT_BIN}
     COMMAND ${CLANG_EXECUTABLE} -O2 
@@ -19,6 +100,14 @@ add_custom_command(
     DEPENDS ${SOURCE_FILE}
     COMMENT "Building direct compilation with -O2"
     WORKING_DIRECTORY ${OUTPUT_DIR}
+)
+
+# Capture direct clang -O2 passes applied
+add_custom_command(
+    OUTPUT ${DIRECT_PASSES_FILE}
+    COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/capture_passes.sh ${CLANG_EXECUTABLE} "-O2 -lm" ${SOURCE_FILE} ${DIRECT_PASSES_FILE}
+    DEPENDS ${SOURCE_FILE}
+    COMMENT "Capturing clang -O2 passes information"
 )
 
 # Pipeline 2: Optimization pipeline with pass
@@ -62,9 +151,19 @@ add_custom_command(
 add_custom_command(
     OUTPUT ${LABELED_BC}
     COMMAND ${OPT_EXECUTABLE} -load-pass-plugin=${PASS_PLUGIN}
-            -passes="ir-bb-label" ${OPT_O2_LL} -o ${LABELED_BC}
+            -passes="ir-bb-label-pass" ${OPT_O2_LL} -o ${LABELED_BC}
     DEPENDS ${OPT_O2_LL} ${PASS_PLUGIN} ${OPT_PASSES_FILE}
-    COMMENT "Labeling basic blocks with ir-bb-label pass"
+    COMMENT "Labeling basic blocks with ir-bb-label-pass"
+    WORKING_DIRECTORY ${OUTPUT_DIR}
+)
+
+# Step 3b: Convert labeled bitcode to readable IR
+set(LABELED_LL ${OUTPUT_DIR}/test5_labeled_instrumented.ll)
+add_custom_command(
+    OUTPUT ${LABELED_LL}
+    COMMAND ${LLVM_DIS_EXECUTABLE} ${LABELED_BC} -o ${LABELED_LL}
+    DEPENDS ${LABELED_BC}
+    COMMENT "Converting labeled bitcode to readable IR"
     WORKING_DIRECTORY ${OUTPUT_DIR}
 )
 
@@ -95,31 +194,32 @@ add_custom_command(
     WORKING_DIRECTORY ${OUTPUT_DIR}
 )
 
-add_custom_target(test5_optimization_target ALL DEPENDS ${DIRECT_BIN} ${OPTIMIZED_BIN} ${OPT_PASSES_FILE} ${LLC_PASSES_FILE})
+add_custom_target(test5_optimization_target ALL DEPENDS ${DIRECT_BIN} ${OPTIMIZED_BIN} ${DIRECT_PASSES_FILE} ${OPT_PASSES_FILE} ${LLC_PASSES_FILE} ${LABELED_LL})
 
 # Tests
-add_test(
-    NAME test5_optimization_pass_check
-    COMMAND ${CMAKE_COMMAND} -E echo "Checking test5 pass labeling..."
-    WORKING_DIRECTORY ${OUTPUT_DIR}
-)
-
 add_test(
     NAME test5_optimization_csv_exists
     COMMAND ${CMAKE_COMMAND} -E cat ${OPTIMIZED_CSV}
     WORKING_DIRECTORY ${OUTPUT_DIR}
 )
 set_tests_properties(test5_optimization_csv_exists PROPERTIES 
-    DEPENDS test5_optimization_pass_check
     PASS_REGULAR_EXPRESSION "FunctionName,FunctionID,BasicBlockName"
 )
 
 add_test(
     NAME test5_optimization_binaries_exist
-    COMMAND ${CMAKE_COMMAND} -E echo "Both direct and optimized binaries created"
+    COMMAND test -f ${DIRECT_BIN} -a -f ${OPTIMIZED_BIN}
     WORKING_DIRECTORY ${OUTPUT_DIR}
 )
 set_tests_properties(test5_optimization_binaries_exist PROPERTIES DEPENDS test5_optimization_csv_exists)
+
+# Test: Verify direct passes captured
+add_test(
+    NAME test5_direct_passes_captured
+    COMMAND test -f ${DIRECT_PASSES_FILE}
+    WORKING_DIRECTORY ${OUTPUT_DIR}
+)
+set_tests_properties(test5_direct_passes_captured PROPERTIES DEPENDS test5_optimization_binaries_exist)
 
 # Test: Verify opt passes captured
 add_test(
@@ -127,7 +227,7 @@ add_test(
     COMMAND test -f ${OPT_PASSES_FILE}
     WORKING_DIRECTORY ${OUTPUT_DIR}
 )
-set_tests_properties(test5_opt_passes_captured PROPERTIES DEPENDS test5_optimization_binaries_exist)
+set_tests_properties(test5_opt_passes_captured PROPERTIES DEPENDS test5_direct_passes_captured)
 
 # Test: Verify llc passes captured
 add_test(
@@ -171,7 +271,24 @@ set_tests_properties(test5_optimized_binary_runs PROPERTIES DEPENDS test5_direct
 # Test: Performance comparison script (if exists)
 add_test(
     NAME test5_performance_comparison
-    COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/compare_performance.sh ${DIRECT_BIN} ${OPTIMIZED_BIN} 5
+    COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/compare_performance.sh ${DIRECT_BIN} ${OPTIMIZED_BIN} 5 ${OUTPUT_DIR}/performance_results.log
     WORKING_DIRECTORY ${OUTPUT_DIR}
 )
 set_tests_properties(test5_performance_comparison PROPERTIES DEPENDS test5_optimized_binary_runs)
+
+# Test: Compare optimization passes between direct and pipelined
+add_test(
+    NAME test5_passes_comparison
+    COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/compare_passes.sh ${DIRECT_PASSES_FILE} ${OPT_PASSES_FILE} ${LLC_PASSES_FILE} ${OUTPUT_DIR}/PASSES_COMPARISON_REPORT.md
+    WORKING_DIRECTORY ${OUTPUT_DIR}
+)
+set_tests_properties(test5_passes_comparison PROPERTIES DEPENDS test5_performance_comparison)
+# Test: Validate metadata in instrumented IR matches CSV
+add_test(
+    NAME test5_metadata_validation
+    COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../common/verify_metadata.py 
+            ${LABELED_LL} ${OPTIMIZED_CSV}
+    WORKING_DIRECTORY ${OUTPUT_DIR}
+)
+set_tests_properties(test5_metadata_validation PROPERTIES 
+    DEPENDS test5_passes_comparison)

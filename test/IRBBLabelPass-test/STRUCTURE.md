@@ -37,47 +37,50 @@ test/
 ├── test5_optimization/                     # Test 5: Optimization pipeline
 │   ├── CMakeLists.txt
 │   ├── fibonacci_source.c                  # Source for both pipelines
-│   └── fibonacci.c                         # Linked in both pipelines
+│   ├── fibonacci.c                         # Linked in both pipelines
+│   ├── capture_passes.sh                   # Script to capture opt/llc passes
+│   └── compare_passes.sh                   # Script to compare passes & generate report
 │
-├── shared_scripts/                         # Shared utility scripts
-│   ├── format_check.cmake
-│   ├── validate_pass.cmake
-│   └── setup_environment.sh
+├── test6_custom_output/                    # Test 6: Custom parameter override
+│   ├── CMakeLists.txt
+│   └── test6_custom_output.c               # Tests custom output filename
+│
+├── common/                                 # Shared utilities
+│   ├── verify_csv.cmake                    # CSV format validation
+│   └── verify_metadata.py                  # IR metadata validation
 │
 └── build/                                  # Generated (cmake --build build)
     ├── test1_simple/
     │   ├── bb_info.csv
-    │   ├── fibonacci.ll
-    │   ├── add.ll
-    │   ├── multiply.ll
-    │   ├── fibonacci.bc
-    │   ├── add.bc
-    │   └── multiply.bc
+    │   ├── test1_simple_instrumented.ll    # IR with !bb.id metadata
+    │   └── test1_simple_instrumented.bc
     ├── test2_dynamic_lib/
     │   ├── bb_info.csv
-    │   ├── main.ll
-    │   └── main.bc
+    │   ├── test2_dynamic_lib_instrumented.ll
+    │   └── test2_dynamic_lib_instrumented.bc
     ├── test3_cpp_static/
     │   ├── bb_info.csv
-    │   ├── vector_ops.ll
-    │   ├── matrix_ops.ll
-    │   └── *.bc
+    │   ├── test3_cpp_static_instrumented.ll
+    │   └── test3_cpp_static_instrumented.bc
     ├── test4_mixed/
     │   ├── bb_info.csv
-    │   ├── compute.ll
-    │   ├── compute_wrapper.ll
-    │   ├── main.ll
-    │   └── *.bc
+    │   ├── test4_mixed_instrumented.ll
+    │   └── test4_mixed_instrumented.bc
     ├── test5_optimization/
     │   ├── bb_info.csv
-    │   ├── test5_direct          # Direct clang -O2 binary
-    │   ├── test5_optimized       # Pipeline-based binary
-    │   ├── opt_passes.txt        # Passes applied by opt -O2
-    │   ├── llc_passes.txt        # Passes applied by llc -O2
-    │   ├── *.ll
-    │   ├── *.bc
-    │   └── fibonacci.c           # Source used in both
-    └── CTestTestfile.cmake       # ctest test registry
+    │   ├── test5_direct              # Direct clang -O2 binary
+    │   ├── test5_optimized           # Pipeline-based binary
+    │   ├── test5_labeled_instrumented.ll  # Labeled IR with metadata
+    │   ├── direct_passes.txt         # clang optimization passes
+    │   ├── opt_passes.txt            # opt -O2 passes applied
+    │   ├── llc_passes.txt            # llc -O2 passes applied
+    │   ├── passes_comparison.txt     # Detailed pass comparison report
+    │   └── *.bc
+    ├── test6_custom_output/
+    │   ├── my_custom_bb_output.csv   # Custom-named CSV output
+    │   ├── test6_custom_output_instrumented.ll
+    │   └── test6_custom_output_instrumented.bc
+    └── CTestTestfile.cmake           # ctest test registry
 ```
 
 ---
@@ -94,13 +97,14 @@ The master build file orchestrates all tests:
    - Sets up CMake test framework
 
 2. **Subdirectory Phase**
-   - Calls `add_subdirectory()` for each test (test1-test5)
+   - Calls `add_subdirectory()` for each test (test1-test6)
    - Each test registers its own build steps and tests
 
 3. **Test Registration Phase**
-   - Tests 1-4: Each registers 3 tests (CSV generation, format, content)
-   - Test 5: Registers 10 tests (CSV validation + optimization verification)
-   - Total: 13 tests + 10 tests = 23 tests + 1 summary = 24 test entries
+   - Tests 1-4: Each registers 4 tests (CSV exists, format, content, metadata validation)
+   - Test 5: Registers 11 tests (binaries + passes + CSV + metadata validation)
+   - Test 6: Registers 4 tests (custom CSV + metadata validation)
+   - Total: 16 + 11 = 27 tests
 
 ### Individual Test CMakeLists.txt
 
@@ -118,10 +122,35 @@ add_custom_command(
 # 2. Add custom target for this build step
 add_custom_target(testN_build ALL DEPENDS *.ll *.bc bb_info.csv)
 
-# 3. Register 3 ctest tests
-add_test(NAME testN_csv_generated ...)
+# 3. Register 4 ctest tests
+add_test(NAME testN_csv_exists ...)
 add_test(NAME testN_csv_format ...)
 add_test(NAME testN_csv_content ...)
+add_test(NAME testN_metadata_validation ...)
+```
+
+### Metadata Validation
+
+**verify_metadata.py** performs comprehensive validation:
+
+1. **Parses instrumented IR**: Extracts `!bb.id` metadata from `*_instrumented.ll` files
+2. **Parses CSV**: Reads basic block information from `bb_info.csv`
+3. **Cross-validates**:
+   - All functions in CSV exist in IR
+   - All basic blocks have matching IDs
+   - BB names match (handles unnamed blocks, numeric labels, complex optimized names)
+4. **Handles edge cases**:
+   - Mangled C++ function names (e.g., `_ZNK3$_0clEv`)
+   - Various linkage types (dso_local, internal, linkonce_odr)
+   - Optimized BB labels with hyphens (e.g., `._crit_edge.unr-lcssa`)
+   - Unnamed basic blocks (numeric labels like `14:` treated as empty)
+
+**Example validation**:
+```python
+python3 verify_metadata.py test1_simple_instrumented.ll bb_info.csv
+# ✓ Metadata validation PASSED
+#   - Functions: 3
+#   - Total basic blocks: 6
 ```
 
 ---
@@ -187,14 +216,15 @@ llvm-dis fibonacci.bc -o fibonacci.ll
 ```
 
 **Expected Output**:
-- 3 BC files (one per source)
-- 3 LL files (disassembled IR with metadata)
+- `test1_simple_instrumented.bc` - Bitcode with `!bb.id` metadata
+- `test1_simple_instrumented.ll` - Readable IR with metadata annotations
 - `bb_info.csv` with ~6 total basic blocks
 
-**Validation Tests** (3 total):
-1. CSV generated ✓
-2. CSV format valid (header + row structure) ✓
+**Validation Tests** (4 total):
+1. CSV exists (with valid header) ✓
+2. CSV format valid (column structure) ✓
 3. CSV content valid (data types, row count) ✓
+4. Metadata valid (IR annotations match CSV) ✓
 
 ---
 
@@ -216,14 +246,15 @@ opt -load NuggetPasses.so -IRBBLabel combined.bc -o combined.bc
 ```
 
 **Expected Output**:
-- Linked LLVM bitcode with external references preserved
+- `test2_dynamic_lib_instrumented.bc/.ll` with metadata
 - `bb_info.csv` with functions and their BBs
 - Symbol resolution for `sin`, `cos`, `pow` maintained
 
-**Validation Tests** (3 total):
-1. CSV generated ✓
+**Validation Tests** (4 total):
+1. CSV exists ✓
 2. CSV format valid ✓
 3. CSV content valid (library calls preserved) ✓
+4. Metadata valid ✓
 
 ---
 
@@ -245,14 +276,16 @@ opt -load NuggetPasses.so -IRBBLabel combined.bc -o combined.bc
 ```
 
 **Expected Output**:
-- Mangled C++ names preserved in CSV
+- `test3_cpp_static_instrumented.bc/.ll` with metadata
+- Mangled C++ names preserved in CSV and IR
 - Template instantiations visible as separate functions
-- `bb_info.csv` with C++ function names properly decoded
+- `bb_info.csv` with C++ function names
 
-**Validation Tests** (3 total):
-1. CSV generated ✓
+**Validation Tests** (4 total):
+1. CSV exists ✓
 2. CSV format valid ✓
 3. CSV content valid (C++ names handled correctly) ✓
+4. Metadata valid (handles mangled names like `_ZNK3$_0clEv`) ✓
 
 ---
 
@@ -276,15 +309,17 @@ opt -load NuggetPasses.so -IRBBLabel combined.bc -o combined.bc
 ```
 
 **Expected Output**:
+- `test4_mixed_instrumented.bc/.ll` with metadata
 - Fortran subroutines IR representation
 - C++/Fortran linkage preserved
 - Symbol resolution across languages
 - `bb_info.csv` with all functions
 
-**Validation Tests** (3 total):
-1. CSV generated ✓
+**Validation Tests** (4 total):
+1. CSV exists ✓
 2. CSV format valid ✓
 3. CSV content valid (language interop preserved) ✓
+4. Metadata valid (cross-language validation) ✓
 
 ---
 
@@ -309,7 +344,8 @@ llc -O2 labeled.bc -o labeled.s
 clang labeled.s fibonacci.c -o test5_optimized
 time ./test5_optimized  # Measure performance
 ```
-
+with similar performance (~29ms)
+- `test5_labeled_instrumented.ll` - IR with metadata from pipelined build
 **Expected Output**:
 - Both binaries execute in ~29ms (identical performance)
 - `opt_passes.txt` - Detailed passes from `opt -O2` (630 lines)
@@ -321,13 +357,54 @@ time ./test5_optimized  # Measure performance
 1. CSV generated ✓
 2. CSV format valid ✓
 3. Both binaries exist ✓
-4. opt passes file captured ✓
-5. llc passes file captured ✓
-6. opt passes file non-empty (>10 lines) ✓
-7. llc passes file non-empty (>10 lines) ✓
+4. Direct passes file captured ✓
+5. opt passes file captured ✓
+6. llc passes file captured ✓
+7. Pass comparison report generated ✓
 8. Direct binary runs successfully ✓
 9. Optimized binary runs successfully ✓
-10. Performance comparison (within 10% tolerance) ✓
+10. Performance comparison (within 5% tolerance) ✓
+
+**New Infrastructure**:
+- `capture_passes.sh` - Captures optimization passes from clang/opt/llc tools
+- `compare_passes.sh` - Generates detailed pass comparison report with statistics
+- `direct_passes.txt` - Passes applied by direct clang compilation
+- `passes_comparison.txt` - Per-function and per-pass analysis report
+
+---
+
+### Test 6: Custom Parameter Override
+
+**Purpose**: Validate pass parameter parsing with custom output filename
+
+**Source Files**:
+- `test6_custom_output.c` - Simple C code with multiply and divide functions
+
+**Compilation & Execution**:
+```bash
+clang -O0 -emit-llvm -S test6_custom_output.c -o test6_custom_output.ll
+opt -load-pass-plugin=NuggetPasses.so \
+    -passes="ir-bb-label-pass<output_csv=my_custom_bb_output.csv>" \
+    test6_custom_output.ll -o test6_custom_output.bc
+```
+
+**Parameter Parsing Features**:
+- Pass name: `ir-bb-label-pass`
+- Option syntax: `<key=value>`
+- Default option: `output_csv` with value `bb_info.csv`
+- Override: Custom value passed via `-passes` argument
+
+**Expected Output**:
+- CSV file created with **custom name** (`my_custom_bb_output.csv`)
+- `test6_custom_output_instrumented.ll` - IR with metadata
+- Basic block information properly labeled
+- CSV format and content valid
+
+**Validation Tests** (4 total):
+1. Custom CSV file exists ✓
+2. CSV format valid ✓
+3. CSV content valid (with custom filename) ✓
+4. Metadata valid ✓
 
 ---
 
@@ -354,14 +431,17 @@ cd build && ctest --output-on-failure
 ### Expected Result
 ```
 Test project /path/to/build
-    Start  1: summary
-    1/23   Test  #1: summary ................................ Passed
-    2/23   Test  #2: test1_simple ........................... Passed
+    Start  1: test1_simple ................................ Passed
+    1/26   Test  #1: test1_simple ........................... Passed
+    2/26   Test  #2: test1_csv_exists ....................... Passed
     ...
-    23/23  Test #23: test5_performance_comparison ........... Passed
+    25/26  Test #25: test5_passes_comparison ............... Passed
+    26/26  Test #26: test6_custom_output ................... Passed
 
-100% tests passed, 0 tests failed out of 23
+100% tests passed, 0 tests failed out of 26
 ```
+
+**Note**: Useless echo-only summary test removed in cleanup phase. Tests are organized by case with dependencies.
 
 ---
 
@@ -499,6 +579,63 @@ add_test(NAME test_csv_format
 - **Required**: LLVM 18+, CMake 3.20+, Clang
 - **Optional**: Flang (for test4), Fortran compiler
 - **Internal**: NuggetPasses.so from `../pass/`
+
+---
+
+## Implementation Details
+
+### Code Style & Standards
+
+All code follows **Google C++ Style Guide** conventions:
+
+| Element | Convention | Example |
+|---------|-----------|---------|
+| Class Names | PascalCase | `IRBBLabelPass`, `BasicBlockInfo` |
+| Function Names | snake_case | `parse_options()`, `match_param_pass()` |
+| Variable Names | snake_case | `function_name`, `basic_block_id` |
+| Macro Names | UPPER_CASE | `DEBUG_PRINT`, `kBbIdKey` |
+| Constants | kName format | `kBbIdKey = "bb_id"` |
+
+### Conditional Debug Output
+
+The pass uses a `DEBUG_PRINT` macro for conditional debug output:
+
+```cpp
+#ifdef DEBUG
+#define DEBUG_PRINT(stream, msg) (stream) << (msg)
+#else
+#define DEBUG_PRINT(stream, msg)
+#endif
+```
+
+**Usage**:
+```cpp
+DEBUG_PRINT(errs(), "Processing function: " << func_name << "\n");
+```
+
+**Compilation**:
+- Default (no debug): `cmake -S . -B build ...`
+- With debug output: `cmake -S . -B build -DDEBUG=ON ...`
+
+### Pass Parameter Parsing
+
+The `ParseOptions()` function handles custom parameters:
+
+```cpp
+auto opts = ParseOptions("-passes=\"ir-bb-label-pass<output_csv=custom.csv>\"");
+// Returns: Expected<std::vector<Options>> with parsed key-value pairs
+```
+
+Supported options:
+- `output_csv` - Custom CSV output filename (default: `bb_info.csv`)
+
+### Test Infrastructure Cleanup
+
+Recent cleanup removed useless echo-only placeholder tests:
+- ✅ Removed no-op echo tests that always passed
+- ✅ Replaced with actual validation tests
+- ✅ Test count reduced from 27 to 26 entries
+- ✅ All tests now provide meaningful validation
 
 ---
 
