@@ -38,14 +38,50 @@
 //   - Control flow with if/else branches
 //   - CSV output generation with correct function and BB metadata
 //   - IR metadata (!bb.id) insertion at appropriate terminator instructions
+//   - Nugget helper functions (nugget_init_, nugget_roi_begin_, nugget_roi_end_)
+//     are correctly ignored and NOT included in the CSV output
 //
 // Expected behavior:
-//   - Pass should label all functions (add, subtract, main)
+//   - Pass should label all user functions (add, subtract, main)
+//   - Pass should SKIP nugget helper functions (nugget_init_, nugget_roi_begin_, 
+//     nugget_roi_end_)
 //   - Each basic block should receive a unique ID
 //   - CSV should contain FunctionName, FunctionID, BasicBlockName, BasicBlockID
 //   - Instrumented IR should have !bb.id metadata on branch/return instructions
 
 #include <stdio.h>
+
+// ============================================================================
+// Nugget helper functions - these should be IGNORED by IRBBLabelPass
+// ============================================================================
+// These functions are used by the Nugget simulator for initialization and
+// region-of-interest (ROI) bounding. The pass should skip them entirely
+// and NOT include them in the CSV output.
+
+// Nugget initialization function.
+// Called once at program start to initialize the Nugget runtime.
+// Should be ignored by IRBBLabelPass.
+void nugget_init_(void) {
+  // Empty - this is a stub for testing that the pass ignores it
+}
+
+// Nugget ROI begin marker.
+// Called to mark the beginning of a region of interest for simulation.
+// Should be ignored by IRBBLabelPass.
+void nugget_roi_begin_(void) {
+  // Empty - this is a stub for testing that the pass ignores it
+}
+
+// Nugget ROI end marker.
+// Called to mark the end of a region of interest for simulation.
+// Should be ignored by IRBBLabelPass.
+void nugget_roi_end_(void) {
+  // Empty - this is a stub for testing that the pass ignores it
+}
+
+// ============================================================================
+// User functions - these SHOULD be labeled by IRBBLabelPass
+// ============================================================================
 
 // Performs integer addition.
 //

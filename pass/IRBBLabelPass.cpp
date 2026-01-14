@@ -65,6 +65,12 @@ PreservedAnalyses IRBBLabelPass::run(Module &M, ModuleAnalysisManager &) {
         // isDeclaration() returns true for functions like printf, malloc, etc.
         if (F.isDeclaration()) continue;
 
+        // Skip function if it is one of the nugget helper functions
+        if (std::find(nugget_functions.begin(), nugget_functions.end(),
+                      F.getName().str()) != nugget_functions.end()) {
+            continue;
+        }
+
         // Process each basic block in the function
         for (BasicBlock &BB : F) {
             // Assign globally unique basic block ID and increment counter

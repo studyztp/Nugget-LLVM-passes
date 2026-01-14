@@ -172,6 +172,8 @@ set_tests_properties(test1_simple_csv_has_content PROPERTIES DEPENDS test1_simpl
 # ============================================================================
 # Runs Python script to cross-validate IR metadata against CSV output
 # Ensures !bb.id annotations in IR match BasicBlockID in CSV
+# Also validates that nugget helper functions (nugget_init_, nugget_roi_begin_,
+# nugget_roi_end_) are properly excluded from both CSV and IR metadata.
 # DEPENDS: Only runs if csv_has_content test passes
 add_test(
     NAME test1_simple_metadata_validation

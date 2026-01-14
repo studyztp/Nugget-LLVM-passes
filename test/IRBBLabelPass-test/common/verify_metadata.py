@@ -63,6 +63,15 @@ import csv
 from pathlib import Path
 from collections import defaultdict
 
+# Nugget helper functions that are intentionally skipped by the pass.
+# These functions are used for simulator initialization and ROI bounding
+# and should NOT appear in the CSV output or have metadata attached.
+NUGGET_EXCLUDED_FUNCTIONS = {
+    'nugget_init_',
+    'nugget_roi_begin_',
+    'nugget_roi_end_'
+}
+
 
 def parse_ir_metadata(ir_file):
     """Extracts basic block metadata from instrumented LLVM IR.
@@ -280,16 +289,42 @@ def validate_metadata(ir_metadata, csv_data):
         - "Function 'helper' in CSV but not found in IR"
         - "Function 'main': IR has 4 BBs, CSV has 3 BBs"
         - "Function 'compute' BB ID 5: IR name='loop.body', CSV name='for.body'"
+        
+    Note:
+        Nugget helper functions (nugget_init_, nugget_roi_begin_, nugget_roi_end_)
+        are intentionally skipped by the pass. This function verifies they have
+        NO metadata attached and do NOT appear in the CSV.
     """
     errors = []
     
-    # Check that all functions in CSV are in IR
+    # Check that nugget functions are NOT in CSV (they should be excluded)
     for func_name in csv_data:
+        if func_name in NUGGET_EXCLUDED_FUNCTIONS:
+            errors.append(
+                f"Nugget function '{func_name}' should NOT be in CSV but was found"
+            )
+    
+    # Check that nugget functions have NO bb.id metadata in IR
+    for func_name in NUGGET_EXCLUDED_FUNCTIONS:
+        if func_name in ir_metadata and len(ir_metadata[func_name]) > 0:
+            errors.append(
+                f"Nugget function '{func_name}' should NOT have bb.id metadata "
+                f"but found {len(ir_metadata[func_name])} labeled basic blocks"
+            )
+    
+    # Check that all non-nugget functions in CSV are in IR
+    for func_name in csv_data:
+        if func_name in NUGGET_EXCLUDED_FUNCTIONS:
+            continue
         if func_name not in ir_metadata:
             errors.append(f"Function '{func_name}' in CSV but not found in IR")
     
-    # Validate each function's basic blocks
+    # Validate each function's basic blocks (excluding nugget functions)
     for func_name in ir_metadata:
+        # Skip nugget helper functions - they are intentionally excluded
+        if func_name in NUGGET_EXCLUDED_FUNCTIONS:
+            continue
+            
         ir_bbs = ir_metadata[func_name]
         
         if func_name not in csv_data:

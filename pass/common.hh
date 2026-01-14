@@ -129,6 +129,13 @@ struct Options {
   }
 };
 
+// Helper functions related to initialization and roi bounding.
+const std::vector<std::string> nugget_functions = {
+    "nugget_init_",
+    "nugget_roi_begin_",
+    "nugget_roi_end_"
+};
+
 // Parses pass parameter string into Options vector.
 //
 // Takes a semicolon-separated parameter string and extracts key-value pairs,
