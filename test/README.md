@@ -42,13 +42,11 @@ cmake --build build
 cd build && ctest --output-on-failure
 ```
 
-**Result**: ✅ All 27 tests PASSING
-
 ## Available Test Suites
 
-| Pass | Status | Location | Tests |
-|------|--------|----------|-------|
-| **IRBBLabel** | ✅ Active | `IRBBLabelPass-test/` | 6 cases, 27 tests |
+| Pass | Location | Description |
+|------|----------|-------------|
+| **IRBBLabel** | `IRBBLabelPass-test/` | Labels basic blocks with unique IDs and exports to CSV |
 
 ## Test Suite Features
 

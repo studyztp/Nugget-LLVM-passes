@@ -2,17 +2,50 @@
 
 # Test script to compare optimization passes between direct and pipelined compilation
 # Generates a detailed report with statistical analysis
+# Uses enhanced Python-based comparison for per-function analysis
 
 DIRECT_PASSES="${1:-direct_passes.txt}"
 OPT_PASSES="${2:-opt_passes.txt}"
 LLC_PASSES="${3:-llc_passes.txt}"
 REPORT_FILE="${4:-PASSES_COMPARISON_REPORT.md}"
 
+# Try to detect direct_machine_passes.txt in same directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -z "$5" ]; then
+    # If not provided as 5th argument, check in same directory as REPORT_FILE
+    REPORT_DIR="$(dirname "$REPORT_FILE")"
+    DIRECT_MACHINE="${REPORT_DIR}/direct_machine_passes.txt"
+    if [ ! -f "$DIRECT_MACHINE" ]; then
+        # Check current directory
+        DIRECT_MACHINE="direct_machine_passes.txt"
+    fi
+else
+    DIRECT_MACHINE="$5"
+fi
+
 if [ ! -f "$DIRECT_PASSES" ] || [ ! -f "$OPT_PASSES" ] || [ ! -f "$LLC_PASSES" ]; then
     echo "Error: Pass files not found"
-    echo "Usage: $0 <direct_passes> <opt_passes> <llc_passes> [report_file]"
+    echo "Usage: $0 <direct_passes> <opt_passes> <llc_passes> [report_file] [direct_machine_passes]"
     exit 1
 fi
+
+# Check if enhanced Python comparison is available
+PYTHON_COMPARE="$SCRIPT_DIR/compare_passes_detailed.py"
+
+if [ -f "$PYTHON_COMPARE" ]; then
+    echo "Using enhanced Python-based comparison..."
+    # Pass direct_machine_passes.txt if it exists
+    if [ -f "$DIRECT_MACHINE" ]; then
+        python3 "$PYTHON_COMPARE" "$DIRECT_PASSES" "$OPT_PASSES" "$LLC_PASSES" "$DIRECT_MACHINE" "$REPORT_FILE"
+    else
+        python3 "$PYTHON_COMPARE" "$DIRECT_PASSES" "$OPT_PASSES" "$LLC_PASSES" "$REPORT_FILE"
+    fi
+    echo "✓ Enhanced report generated: $REPORT_FILE"
+    exit 0
+fi
+
+echo "Enhanced comparison script not found, falling back to basic comparison..."
+echo ""
 
 # Extract pass names (remove prefixes and suffixes)
 extract_passes() {

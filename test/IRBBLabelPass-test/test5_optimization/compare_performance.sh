@@ -36,42 +36,92 @@ fi
     echo ""
 } > "$LOG_FILE"
 
-# Function to run and time a binary
+# Function to run binary and extract total CPU time from its output
+# The binary prints "Time: X.XXXXXX seconds" for each test - we sum them
+get_cpu_time() {
+    local binary="$1"
+    local total_us=0
+    
+    # Run binary and capture output
+    local output
+    output=$("$binary" 2>&1)
+    
+    # Extract all "Time: X.XXXXXX seconds" lines and sum them
+    # Convert to microseconds for integer arithmetic
+    while IFS= read -r line; do
+        if [[ "$line" =~ Time:\ ([0-9]+)\.([0-9]+)\ seconds ]]; then
+            local secs="${BASH_REMATCH[1]}"
+            local frac="${BASH_REMATCH[2]}"
+            # Pad/truncate fraction to 6 digits (microseconds)
+            frac=$(printf "%-6s" "$frac" | tr ' ' '0' | cut -c1-6)
+            local us=$((10#$secs * 1000000 + 10#$frac))
+            total_us=$((total_us + us))
+        fi
+    done <<< "$output"
+    
+    echo "$total_us"
+}
+
+# Run multiple iterations and average the CPU time
 time_binary() {
     local binary="$1"
     local total=0
     
     for i in $(seq 1 $ITERATIONS); do
-        # Use time to measure real execution time in milliseconds
-        local start=$(date +%s%N)
-        "$binary" > /dev/null 2>&1
-        local end=$(date +%s%N)
-        local elapsed=$(( (end - start) / 1000000 ))
-        total=$((total + elapsed))
+        local cpu_us
+        cpu_us=$(get_cpu_time "$binary")
+        total=$((total + cpu_us))
     done
     
+    # Return average in microseconds
     echo $((total / ITERATIONS))
 }
 
-echo "Running direct compilation binary..." | tee -a "$LOG_FILE"
+echo "Running direct compilation binary ($ITERATIONS iterations)..." | tee -a "$LOG_FILE"
 DIRECT_AVG=$(time_binary "$DIRECT_BIN")
 
-echo "Running optimized pipeline binary..." | tee -a "$LOG_FILE"
+echo "Running optimized pipeline binary ($ITERATIONS iterations)..." | tee -a "$LOG_FILE"
 OPTIMIZED_AVG=$(time_binary "$OPTIMIZED_BIN")
+
+# Convert microseconds to human-readable format
+format_time() {
+    local us=$1
+    local sign=""
+    
+    # Handle negative values
+    if [ $us -lt 0 ]; then
+        sign="-"
+        us=$((-us))
+    fi
+    
+    if [ $us -ge 1000000 ]; then
+        # Show in seconds with 3 decimal places
+        local secs=$((us / 1000000))
+        local frac=$(( (us % 1000000) / 1000 ))
+        printf "%s%d.%03d s" "$sign" "$secs" "$frac"
+    elif [ $us -ge 1000 ]; then
+        # Show in milliseconds with 3 decimal places
+        local ms=$((us / 1000))
+        local frac=$((us % 1000))
+        printf "%s%d.%03d ms" "$sign" "$ms" "$frac"
+    else
+        printf "%s%d µs" "$sign" "$us"
+    fi
+}
 
 {
     echo ""
     echo "==========================================="
-    echo "Results:"
+    echo "Results (CPU time measured inside binary):"
     echo "==========================================="
-    echo "Direct compilation avg:     ${DIRECT_AVG} ms"
-    echo "Optimized pipeline avg:     ${OPTIMIZED_AVG} ms"
+    echo "Direct compilation avg:     $(format_time $DIRECT_AVG) ($DIRECT_AVG µs)"
+    echo "Optimized pipeline avg:     $(format_time $OPTIMIZED_AVG) ($OPTIMIZED_AVG µs)"
 } >> "$LOG_FILE"
 
-# Calculate difference
+# Calculate difference in microseconds
 DIFF=$((OPTIMIZED_AVG - DIRECT_AVG))
 {
-    echo "Difference:                 ${DIFF} ms"
+    echo "Difference:                 $(format_time $DIFF) ($DIFF µs)"
 } >> "$LOG_FILE"
 
 # Calculate percentage difference (avoid division by zero)

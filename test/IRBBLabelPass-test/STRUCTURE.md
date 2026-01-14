@@ -36,51 +36,21 @@ test/
 │
 ├── test5_optimization/                     # Test 5: Optimization pipeline
 │   ├── CMakeLists.txt
-│   ├── fibonacci_source.c                  # Source for both pipelines
-│   ├── fibonacci.c                         # Linked in both pipelines
-│   ├── capture_passes.sh                   # Script to capture opt/llc passes
-│   └── compare_passes.sh                   # Script to compare passes & generate report
+│   ├── capture_passes.sh                   # Script to capture all passes
+│   ├── compare_passes.sh                   # Comparison wrapper
+│   ├── compare_passes_detailed.py          # Enhanced Python comparison
+│   ├── compare_performance.sh              # Performance testing
+│   ├── test5_optimization.c                # Test source code
+│   └── (generated at build time: direct_passes.txt, opt_passes.txt, llc_passes.txt, direct_machine_passes.txt, PASSES_COMPARISON_REPORT.md)
 │
 ├── test6_custom_output/                    # Test 6: Custom parameter override
 │   ├── CMakeLists.txt
 │   └── test6_custom_output.c               # Tests custom output filename
 │
-├── common/                                 # Shared utilities
-│   ├── verify_csv.cmake                    # CSV format validation
-│   └── verify_metadata.py                  # IR metadata validation
-│
-└── build/                                  # Generated (cmake --build build)
-    ├── test1_simple/
-    │   ├── bb_info.csv
-    │   ├── test1_simple_instrumented.ll    # IR with !bb.id metadata
-    │   └── test1_simple_instrumented.bc
-    ├── test2_dynamic_lib/
-    │   ├── bb_info.csv
-    │   ├── test2_dynamic_lib_instrumented.ll
-    │   └── test2_dynamic_lib_instrumented.bc
-    ├── test3_cpp_static/
-    │   ├── bb_info.csv
-    │   ├── test3_cpp_static_instrumented.ll
-    │   └── test3_cpp_static_instrumented.bc
-    ├── test4_mixed/
-    │   ├── bb_info.csv
-    │   ├── test4_mixed_instrumented.ll
-    │   └── test4_mixed_instrumented.bc
-    ├── test5_optimization/
-    │   ├── bb_info.csv
-    │   ├── test5_direct              # Direct clang -O2 binary
-    │   ├── test5_optimized           # Pipeline-based binary
-    │   ├── test5_labeled_instrumented.ll  # Labeled IR with metadata
-    │   ├── direct_passes.txt         # clang optimization passes
-    │   ├── opt_passes.txt            # opt -O2 passes applied
-    │   ├── llc_passes.txt            # llc -O2 passes applied
-    │   ├── passes_comparison.txt     # Detailed pass comparison report
-    │   └── *.bc
-    ├── test6_custom_output/
-    │   ├── my_custom_bb_output.csv   # Custom-named CSV output
-    │   ├── test6_custom_output_instrumented.ll
-    │   └── test6_custom_output_instrumented.bc
-    └── CTestTestfile.cmake           # ctest test registry
+└── common/                                 # Shared utilities
+    ├── verify_csv.cmake                    # CSV format validation
+    └── verify_metadata.py                  # IR metadata validation
+
 ```
 
 ---
@@ -101,10 +71,9 @@ The master build file orchestrates all tests:
    - Each test registers its own build steps and tests
 
 3. **Test Registration Phase**
-   - Tests 1-4: Each registers 4 tests (CSV exists, format, content, metadata validation)
-   - Test 5: Registers 11 tests (binaries + passes + CSV + metadata validation)
-   - Test 6: Registers 4 tests (custom CSV + metadata validation)
-   - Total: 16 + 11 = 27 tests
+   - Tests 1-4: Each registers tests for CSV validation and metadata verification
+   - Test 5: Registers tests for binary compilation, performance, and pass comparison
+   - Test 6: Registers tests for custom parameter handling
 
 ### Individual Test CMakeLists.txt
 
@@ -218,13 +187,13 @@ llvm-dis fibonacci.bc -o fibonacci.ll
 **Expected Output**:
 - `test1_simple_instrumented.bc` - Bitcode with `!bb.id` metadata
 - `test1_simple_instrumented.ll` - Readable IR with metadata annotations
-- `bb_info.csv` with ~6 total basic blocks
+- `bb_info.csv` - Basic block information
 
-**Validation Tests** (4 total):
-1. CSV exists (with valid header) ✓
-2. CSV format valid (column structure) ✓
-3. CSV content valid (data types, row count) ✓
-4. Metadata valid (IR annotations match CSV) ✓
+**Validations**:
+- CSV exists with valid header
+- CSV format valid (column structure)
+- CSV content valid (data types, row count)
+- Metadata valid (IR annotations match CSV)
 
 ---
 
@@ -250,11 +219,11 @@ opt -load NuggetPasses.so -IRBBLabel combined.bc -o combined.bc
 - `bb_info.csv` with functions and their BBs
 - Symbol resolution for `sin`, `cos`, `pow` maintained
 
-**Validation Tests** (4 total):
-1. CSV exists ✓
-2. CSV format valid ✓
-3. CSV content valid (library calls preserved) ✓
-4. Metadata valid ✓
+**Validations**:
+- CSV exists
+- CSV format valid
+- CSV content valid (library calls preserved)
+- Metadata valid
 
 ---
 
@@ -281,11 +250,11 @@ opt -load NuggetPasses.so -IRBBLabel combined.bc -o combined.bc
 - Template instantiations visible as separate functions
 - `bb_info.csv` with C++ function names
 
-**Validation Tests** (4 total):
-1. CSV exists ✓
-2. CSV format valid ✓
-3. CSV content valid (C++ names handled correctly) ✓
-4. Metadata valid (handles mangled names like `_ZNK3$_0clEv`) ✓
+**Validations**:
+- CSV exists
+- CSV format valid
+- CSV content valid (C++ names handled correctly)
+- Metadata valid (handles mangled names like `_ZNK3$_0clEv`)
 
 ---
 
@@ -315,11 +284,11 @@ opt -load NuggetPasses.so -IRBBLabel combined.bc -o combined.bc
 - Symbol resolution across languages
 - `bb_info.csv` with all functions
 
-**Validation Tests** (4 total):
-1. CSV exists ✓
-2. CSV format valid ✓
-3. CSV content valid (language interop preserved) ✓
-4. Metadata valid (cross-language validation) ✓
+**Validations**:
+- CSV exists
+- CSV format valid
+- CSV content valid (language interop preserved)
+- Metadata valid (cross-language validation)
 
 ---
 
@@ -344,32 +313,29 @@ llc -O2 labeled.bc -o labeled.s
 clang labeled.s fibonacci.c -o test5_optimized
 time ./test5_optimized  # Measure performance
 ```
-with similar performance (~29ms)
 - `test5_labeled_instrumented.ll` - IR with metadata from pipelined build
+
 **Expected Output**:
-- Both binaries execute in ~29ms (identical performance)
-- `opt_passes.txt` - Detailed passes from `opt -O2` (630 lines)
-- `llc_passes.txt` - Detailed passes from `llc -O2` (704 lines)
-- `bb_info.csv` with 37 labeled BBs across 6 functions
-- Performance comparison report
+- Both binaries execute with equivalent performance
+- `direct_passes.txt` - IR passes from direct compilation
+- `opt_passes.txt` - IR passes from opt -O2
+- `llc_passes.txt` - Machine passes from llc -O2
+- `direct_machine_passes.txt` - Machine passes from direct compilation
+- `PASSES_COMPARISON_REPORT.md` - Comprehensive analysis
+- `bb_info.csv` with labeled basic blocks
 
-**Validation Tests** (10 total):
-1. CSV generated ✓
-2. CSV format valid ✓
-3. Both binaries exist ✓
-4. Direct passes file captured ✓
-5. opt passes file captured ✓
-6. llc passes file captured ✓
-7. Pass comparison report generated ✓
-8. Direct binary runs successfully ✓
-9. Optimized binary runs successfully ✓
-10. Performance comparison (within 5% tolerance) ✓
+**Validations**:
+- CSV exists
+- CSV format valid
+- Both binaries exist and execute successfully
+- Performance comparison within tolerance
+- Pass comparison report generated
 
-**New Infrastructure**:
-- `capture_passes.sh` - Captures optimization passes from clang/opt/llc tools
-- `compare_passes.sh` - Generates detailed pass comparison report with statistics
-- `direct_passes.txt` - Passes applied by direct clang compilation
-- `passes_comparison.txt` - Per-function and per-pass analysis report
+**Infrastructure**:
+- `capture_passes.sh` - Captures optimization passes from clang/opt/llc
+- `compare_passes.sh` - Wrapper for comparison with auto-detection
+- `compare_passes_detailed.py` - Enhanced Python comparison script
+- `compare_performance.sh` - Performance measurements
 
 ---
 
@@ -400,11 +366,11 @@ opt -load-pass-plugin=NuggetPasses.so \
 - Basic block information properly labeled
 - CSV format and content valid
 
-**Validation Tests** (4 total):
-1. Custom CSV file exists ✓
-2. CSV format valid ✓
-3. CSV content valid (with custom filename) ✓
-4. Metadata valid ✓
+**Validations**:
+- Custom CSV file exists
+- CSV format valid
+- CSV content valid
+- Metadata valid
 
 ---
 
@@ -427,21 +393,6 @@ cmake --build build
 ```bash
 cd build && ctest --output-on-failure
 ```
-
-### Expected Result
-```
-Test project /path/to/build
-    Start  1: test1_simple ................................ Passed
-    1/26   Test  #1: test1_simple ........................... Passed
-    2/26   Test  #2: test1_csv_exists ....................... Passed
-    ...
-    25/26  Test #25: test5_passes_comparison ............... Passed
-    26/26  Test #26: test6_custom_output ................... Passed
-
-100% tests passed, 0 tests failed out of 26
-```
-
-**Note**: Useless echo-only summary test removed in cleanup phase. Tests are organized by case with dependencies.
 
 ---
 
@@ -530,22 +481,6 @@ cd build && cmake --build . && ctest --output-on-failure
 
 ---
 
-## Performance Characteristics
-
-Based on Test 5 measurements:
-
-| Metric | Value |
-|--------|-------|
-| Direct compilation time (clang -O2) | ~50ms |
-| IR generation (clang -emit-llvm) | ~20ms |
-| Pass execution (-IRBBLabel) | ~5ms |
-| Optimization (opt -O2) | ~15ms |
-| Code gen (llc -O2) | ~30ms |
-| Total pipeline time | ~100ms |
-| **Runtime performance delta** | **0% (no regression)** |
-
----
-
 ## Configuration Files
 
 ### verify_csv.cmake
@@ -629,14 +564,6 @@ auto opts = ParseOptions("-passes=\"ir-bb-label-pass<output_csv=custom.csv>\"");
 Supported options:
 - `output_csv` - Custom CSV output filename (default: `bb_info.csv`)
 
-### Test Infrastructure Cleanup
-
-Recent cleanup removed useless echo-only placeholder tests:
-- ✅ Removed no-op echo tests that always passed
-- ✅ Replaced with actual validation tests
-- ✅ Test count reduced from 27 to 26 entries
-- ✅ All tests now provide meaningful validation
-
 ---
 
-See [README.md](README.md) for quick start and test results summary.
+See [README.md](README.md) for quick start and test overview.

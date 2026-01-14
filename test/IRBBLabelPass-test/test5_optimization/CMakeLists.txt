@@ -68,15 +68,14 @@
 #   - -O2 applies backend optimizations (instruction selection, register allocation)
 #   - Some basic blocks are created/modified during code generation
 #
-# Tests registered (11 total):
-#   1. test5_optimization_csv_exists
-#   2. test5_optimization_binaries_exist
-#   3-5. test5_*_passes_captured (direct/opt/llc)
-#   6-7. test5_*_passes_nonempty (verify pass files have content)
-#   8-9. test5_*_binary_runs (both binaries execute successfully)
-#   10. test5_performance_comparison (overhead check)
-#   11. test5_passes_comparison (pass analysis report)
-#   12. test5_metadata_validation (IR metadata vs CSV)
+# Tests registered (7 total):
+#   1. test5_optimization_csv_exists (CSV file exists)
+#   2. test5_optimization_binaries_exist (both binaries built)
+#   3. test5_direct_binary_runs (direct binary executes)
+#   4. test5_optimized_binary_runs (optimized binary executes)
+#   5. test5_performance_comparison (performance overhead check)
+#   6. test5_passes_comparison (pass analysis report with validation)
+#   7. test5_metadata_validation (IR metadata vs CSV)
 
 cmake_minimum_required(VERSION 3.20)
 
@@ -185,6 +184,28 @@ add_custom_command(
     COMMENT "Capturing llc -O2 passes information"
 )
 
+# Step 4c: Capture machine-level passes from direct compilation
+# Note: We compile the source to optimized IR first, then run llc to get machine passes
+set(DIRECT_OPTIMIZED_LL ${OUTPUT_DIR}/test5_optimized_direct.ll)
+set(DIRECT_MACHINE_PASSES_FILE ${OUTPUT_DIR}/direct_machine_passes.txt)
+
+# First compile to optimized IR
+add_custom_command(
+    OUTPUT ${DIRECT_OPTIMIZED_LL}
+    COMMAND ${CLANG_EXECUTABLE} -O2 -Xclang -disable-O0-optnone -S -emit-llvm ${SOURCE_FILE} -o ${DIRECT_OPTIMIZED_LL}
+    DEPENDS ${SOURCE_FILE}
+    COMMENT "Generating optimized IR from direct clang -O2 compilation"
+    WORKING_DIRECTORY ${OUTPUT_DIR}
+)
+
+# Then capture machine passes from llc on the optimized IR
+add_custom_command(
+    OUTPUT ${DIRECT_MACHINE_PASSES_FILE}
+    COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/capture_passes.sh ${LLC_EXECUTABLE} "-O2 -filetype=obj -relocation-model=pic" ${DIRECT_OPTIMIZED_LL} ${DIRECT_MACHINE_PASSES_FILE}
+    DEPENDS ${DIRECT_OPTIMIZED_LL}
+    COMMENT "Capturing machine-level passes from direct clang -O2 compilation"
+)
+
 # Step 5: Link to create executable
 add_custom_command(
     OUTPUT ${OPTIMIZED_BIN}
@@ -194,7 +215,7 @@ add_custom_command(
     WORKING_DIRECTORY ${OUTPUT_DIR}
 )
 
-add_custom_target(test5_optimization_target ALL DEPENDS ${DIRECT_BIN} ${OPTIMIZED_BIN} ${DIRECT_PASSES_FILE} ${OPT_PASSES_FILE} ${LLC_PASSES_FILE} ${LABELED_LL})
+add_custom_target(test5_optimization_target ALL DEPENDS ${DIRECT_BIN} ${OPTIMIZED_BIN} ${DIRECT_PASSES_FILE} ${OPT_PASSES_FILE} ${LLC_PASSES_FILE} ${DIRECT_MACHINE_PASSES_FILE} ${LABELED_LL})
 
 # Tests
 add_test(
@@ -213,53 +234,13 @@ add_test(
 )
 set_tests_properties(test5_optimization_binaries_exist PROPERTIES DEPENDS test5_optimization_csv_exists)
 
-# Test: Verify direct passes captured
-add_test(
-    NAME test5_direct_passes_captured
-    COMMAND test -f ${DIRECT_PASSES_FILE}
-    WORKING_DIRECTORY ${OUTPUT_DIR}
-)
-set_tests_properties(test5_direct_passes_captured PROPERTIES DEPENDS test5_optimization_binaries_exist)
-
-# Test: Verify opt passes captured
-add_test(
-    NAME test5_opt_passes_captured
-    COMMAND test -f ${OPT_PASSES_FILE}
-    WORKING_DIRECTORY ${OUTPUT_DIR}
-)
-set_tests_properties(test5_opt_passes_captured PROPERTIES DEPENDS test5_direct_passes_captured)
-
-# Test: Verify llc passes captured
-add_test(
-    NAME test5_llc_passes_captured
-    COMMAND test -f ${LLC_PASSES_FILE}
-    WORKING_DIRECTORY ${OUTPUT_DIR}
-)
-set_tests_properties(test5_llc_passes_captured PROPERTIES DEPENDS test5_opt_passes_captured)
-
-# Test: Verify opt passes file has content
-add_test(
-    NAME test5_opt_passes_nonempty
-    COMMAND bash -c "[ $(wc -l < ${OPT_PASSES_FILE}) -gt 10 ]"
-    WORKING_DIRECTORY ${OUTPUT_DIR}
-)
-set_tests_properties(test5_opt_passes_nonempty PROPERTIES DEPENDS test5_llc_passes_captured)
-
-# Test: Verify llc passes file has content
-add_test(
-    NAME test5_llc_passes_nonempty
-    COMMAND bash -c "[ $(wc -l < ${LLC_PASSES_FILE}) -gt 10 ]"
-    WORKING_DIRECTORY ${OUTPUT_DIR}
-)
-set_tests_properties(test5_llc_passes_nonempty PROPERTIES DEPENDS test5_opt_passes_nonempty)
-
 # Test: Performance comparison (both binaries run successfully)
 add_test(
     NAME test5_direct_binary_runs
     COMMAND ${DIRECT_BIN}
     WORKING_DIRECTORY ${OUTPUT_DIR}
 )
-set_tests_properties(test5_direct_binary_runs PROPERTIES DEPENDS test5_llc_passes_nonempty)
+set_tests_properties(test5_direct_binary_runs PROPERTIES DEPENDS test5_optimization_binaries_exist)
 
 add_test(
     NAME test5_optimized_binary_runs
@@ -279,7 +260,7 @@ set_tests_properties(test5_performance_comparison PROPERTIES DEPENDS test5_optim
 # Test: Compare optimization passes between direct and pipelined
 add_test(
     NAME test5_passes_comparison
-    COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/compare_passes.sh ${DIRECT_PASSES_FILE} ${OPT_PASSES_FILE} ${LLC_PASSES_FILE} ${OUTPUT_DIR}/PASSES_COMPARISON_REPORT.md
+    COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/compare_passes.sh ${DIRECT_PASSES_FILE} ${OPT_PASSES_FILE} ${LLC_PASSES_FILE} ${OUTPUT_DIR}/PASSES_COMPARISON_REPORT.md ${DIRECT_MACHINE_PASSES_FILE}
     WORKING_DIRECTORY ${OUTPUT_DIR}
 )
 set_tests_properties(test5_passes_comparison PROPERTIES DEPENDS test5_performance_comparison)

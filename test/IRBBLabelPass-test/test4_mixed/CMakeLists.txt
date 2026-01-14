@@ -76,30 +76,52 @@ file(MAKE_DIRECTORY ${OUTPUT_DIR})
 set(CPP_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/test4_mixed_cpp_fortran.cpp)
 set(F90_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/fortran_part.f90)
 
+set(CPP_LL_RAW ${OUTPUT_DIR}/test4_cpp_raw.ll)
 set(CPP_LL ${OUTPUT_DIR}/test4_cpp.ll)
+set(F90_LL_RAW ${OUTPUT_DIR}/test4_fortran_raw.ll)
 set(F90_LL ${OUTPUT_DIR}/test4_fortran.ll)
 set(LINKED_BC ${OUTPUT_DIR}/test4_linked.bc)
 set(BC_FILE ${OUTPUT_DIR}/test4_mixed_instrumented.bc)
 set(CSV_FILE ${OUTPUT_DIR}/bb_info.csv)
 set(READABLE_LL ${OUTPUT_DIR}/test4_mixed_instrumented.ll)
 
-# Step 1a: Compile C++ part to LLVM IR
+# Step 1a: Compile C++ part to LLVM IR (raw output)
 add_custom_command(
-    OUTPUT ${CPP_LL}
+    OUTPUT ${CPP_LL_RAW}
     COMMAND ${CLANGXX_EXECUTABLE} -O0 -Xclang -disable-O0-optnone -S -emit-llvm 
-            ${CPP_SOURCE} -o ${CPP_LL}
+            ${CPP_SOURCE} -o ${CPP_LL_RAW}
     DEPENDS ${CPP_SOURCE}
     COMMENT "Compiling C++ part to LLVM IR"
     WORKING_DIRECTORY ${OUTPUT_DIR}
 )
 
+# Step 1a-fix: Fix clang's non-standard frame-pointer attribute value
+# clang generates "non-leaf-no-reserve" which is not recognized by llvm-link verifier
+add_custom_command(
+    OUTPUT ${CPP_LL}
+    COMMAND sed -e "s/non-leaf-no-reserve/non-leaf/g" ${CPP_LL_RAW} > ${CPP_LL}
+    DEPENDS ${CPP_LL_RAW}
+    COMMENT "Fixing C++ frame-pointer attribute for llvm-link compatibility"
+    WORKING_DIRECTORY ${OUTPUT_DIR}
+)
+
 # Step 1b: Compile Fortran part to LLVM IR
 add_custom_command(
-    OUTPUT ${F90_LL}
+    OUTPUT ${F90_LL_RAW}
     COMMAND ${FLANG_EXECUTABLE} -O0 -S -emit-llvm 
-            ${F90_SOURCE} -o ${F90_LL}
+            ${F90_SOURCE} -o ${F90_LL_RAW}
     DEPENDS ${F90_SOURCE}
     COMMENT "Compiling Fortran part to LLVM IR"
+    WORKING_DIRECTORY ${OUTPUT_DIR}
+)
+
+# Step 1c: Fix Flang's non-standard frame-pointer attribute from Fortran IR
+# flang generates 'non-leaf-no-reserve' which is not recognized by llvm-link verifier
+add_custom_command(
+    OUTPUT ${F90_LL}
+    COMMAND sed -e "s/non-leaf-no-reserve/non-leaf/g" ${F90_LL_RAW} > ${F90_LL}
+    DEPENDS ${F90_LL_RAW}
+    COMMENT "Fixing Fortran IR frame-pointer attribute for llvm-link compatibility"
     WORKING_DIRECTORY ${OUTPUT_DIR}
 )
 

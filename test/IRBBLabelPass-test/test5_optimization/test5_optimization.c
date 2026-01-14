@@ -230,39 +230,45 @@ double compute_sum(int iterations) {
 // Each test measures execution time to detect performance regressions
 // from instrumentation. The compare_performance.sh script verifies
 // overhead is within acceptable bounds (< 5%).
+
+// Helper function to compute elapsed time in seconds from timespec
+static double elapsed_seconds(struct timespec start, struct timespec end) {
+    return (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
+}
+
 int main() {
-    clock_t start, end;
-    double cpu_time_used;
+    struct timespec start, end;
+    double elapsed;
     
     printf("=== Optimization Test ===\n");
     printf("Testing compute-heavy operations\n\n");
     
     // Test 1: Fibonacci - recursive function optimization
     printf("Test 1: Fibonacci(35)\n");
-    start = clock();
+    clock_gettime(CLOCK_MONOTONIC, &start);
     long fib_result = fibonacci(35);
-    end = clock();
-    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    elapsed = elapsed_seconds(start, end);
     printf("Result: %ld\n", fib_result);
-    printf("Time: %.6f seconds\n\n", cpu_time_used);
+    printf("Time: %.6f seconds\n\n", elapsed);
     
     // Test 2: Prime counting - loop and function call optimization
     printf("Test 2: Count primes up to 10000\n");
-    start = clock();
+    clock_gettime(CLOCK_MONOTONIC, &start);
     int prime_count = count_primes(10000);
-    end = clock();
-    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    elapsed = elapsed_seconds(start, end);
     printf("Prime count: %d\n", prime_count);
-    printf("Time: %.6f seconds\n\n", cpu_time_used);
+    printf("Time: %.6f seconds\n\n", elapsed);
     
     // Test 3: Numerical computation - FP and math library optimization
     printf("Test 3: Sum computation (1000000 iterations)\n");
-    start = clock();
+    clock_gettime(CLOCK_MONOTONIC, &start);
     double sum_result = compute_sum(1000000);
-    end = clock();
-    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    elapsed = elapsed_seconds(start, end);
     printf("Sum result: %.6f\n", sum_result);
-    printf("Time: %.6f seconds\n\n", cpu_time_used);
+    printf("Time: %.6f seconds\n\n", elapsed);
     
     // Test 4: Matrix operations - memory access and vectorization
     printf("Test 4: Matrix multiply (50x50)\n");
@@ -279,12 +285,12 @@ int main() {
         }
     }
     
-    start = clock();
+    clock_gettime(CLOCK_MONOTONIC, &start);
     matrix_multiply(matrix_size, a, b, c);
-    end = clock();
-    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    elapsed = elapsed_seconds(start, end);
     printf("Result[0][0]: %.6f\n", c[0][0]);
-    printf("Time: %.6f seconds\n\n", cpu_time_used);
+    printf("Time: %.6f seconds\n\n", elapsed);
     
     printf("=== All tests completed ===\n");
     
