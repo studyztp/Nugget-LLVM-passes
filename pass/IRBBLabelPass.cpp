@@ -71,12 +71,14 @@ PreservedAnalyses IRBBLabelPass::run(Module &M, ModuleAnalysisManager &) {
             uint64_t bb_id = basic_block_global_counter++;
 
             // Attach !bb.id metadata to the terminator instruction
-            // Terminator is the last instruction in a BB (br, ret, switch, etc.)
+            // Terminator is the last instruction in a BB (the branch 
+            // instruction)
             Instruction *T = BB.getTerminator();
             if (T) {
                 // Create metadata node: !bb.id !N where !N = !{"<bb_id>"}
                 // The ID is stored as a string within an MDString node
-                MDNode *N = MDNode::get(C, MDString::get(C, std::to_string(bb_id)));
+                MDNode *N = MDNode::get(C, MDString::get(
+                                                    C, std::to_string(bb_id)));
                 T->setMetadata(kBbIdKey, N);
             } else {
                 // Warn if basic block has no terminator (malformed IR)
@@ -88,11 +90,16 @@ PreservedAnalyses IRBBLabelPass::run(Module &M, ModuleAnalysisManager &) {
 
             // Collect basic block information for CSV export
             BasicBlockInfo bb_info;
-            bb_info.function_name = F.getName().str();  // Function name (mangled for C++)
-            bb_info.function_id = function_counter;      // Current function's ID
-            bb_info.basic_block_name = BB.getName().str();  // BB label ("" for entry block)
-            bb_info.basic_block_inst_count = BB.size();  // Number of instructions
-            bb_info.basic_block_id = bb_id;              // Globally unique BB ID
+            // Function name (mangled for C++)
+            bb_info.function_name = F.getName().str();  
+            // Current function's ID
+            bb_info.function_id = function_counter;   
+            // BB label ("" for entry block)   
+            bb_info.basic_block_name = BB.getName().str();  
+            // Number of instructions
+            bb_info.basic_block_inst_count = BB.size(); 
+            // Globally unique BB ID 
+            bb_info.basic_block_id = bb_id;              
 
             bb_info_list_.push_back(bb_info);
         }
@@ -101,7 +108,8 @@ PreservedAnalyses IRBBLabelPass::run(Module &M, ModuleAnalysisManager &) {
     }
 
     // Export collected basic block information to CSV file
-    // File path is specified in options_[0].option_value (default: "bb_info.csv")
+    // File path is specified in options_[0].option_value (default: 
+    //                                                          "bb_info.csv")
     std::error_code EC;
     raw_fd_ostream csv_file(options_[0].option_value, EC, sys::fs::OF_Text);
     if (EC) {
@@ -111,13 +119,15 @@ PreservedAnalyses IRBBLabelPass::run(Module &M, ModuleAnalysisManager &) {
     }
     
     // Write CSV header row
-    csv_file << "FunctionName,FunctionID,BasicBlockName,BasicBlockInstCount,BasicBlockID\n";
+    csv_file << "FunctionName,FunctionID,BasicBlockName,"
+                                    << "BasicBlockInstCount,BasicBlockID\n";
     
     // Write data rows (one per basic block)
     for (const auto &bb_info : bb_info_list_) {
         csv_file << bb_info.function_name << ","
                 << bb_info.function_id << ","
-                << bb_info.basic_block_name << ","  // Empty string for entry block
+                // Empty string is allowed
+                << bb_info.basic_block_name << ","  
                 << bb_info.basic_block_inst_count << ","
                 << bb_info.basic_block_id << "\n";
     }

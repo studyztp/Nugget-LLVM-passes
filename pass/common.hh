@@ -139,7 +139,8 @@ struct Options {
 //   "key1=value1;key2=value2;key3=value3"
 //
 // Args:
-//   Params: Parameter string from pass invocation (e.g., "output_csv=file.csv")
+//   Params: Parameter string from pass invocation (e.g., 
+//                                                       "output_csv=file.csv")
 //   TargetOptions: Vector of expected options with default values
 //
 // Returns:
@@ -155,7 +156,8 @@ struct Options {
 //
 // Implementation note:
 //   Uses simple O(n*m) search since typical option count is < 5.
-static Expected<std::vector<Options>> ParseOptions(StringRef Params, const std::vector<Options> TargetOptions) {
+static Expected<std::vector<Options>> ParseOptions(StringRef Params, 
+                            const std::vector<Options> TargetOptions) {
   // Split parameter string by semicolons into individual key=value pairs.
   
   SmallVector<StringRef, 8> Items;
@@ -173,29 +175,35 @@ static Expected<std::vector<Options>> ParseOptions(StringRef Params, const std::
     StringRef V = KV.second.trim();
 
     if (K.empty() || V.empty()) {
-      return make_error<StringError>("invalid option: " + It, inconvertibleErrorCode());
+      return make_error<StringError>("invalid option: " + It, 
+                                                    inconvertibleErrorCode());
     }
     
     bool Found = false;
     for (auto &Opt : ReturnOptions) {
-      DEBUG_PRINT("comparing K='" << K.str() << "' with Opt.option_name='" << Opt.option_name << "'");
+      DEBUG_PRINT("comparing K='" << K.str() << "' with Opt.option_name='" 
+                                                    << Opt.option_name << "'");
       if (Opt.option_name == K.str()) {
         Opt.option_value = V.str();
-        DEBUG_PRINT("Match found! Set " << Opt.option_name << " = " << Opt.option_value);
+        DEBUG_PRINT("Match found! Set " << Opt.option_name << " = " 
+                                                          << Opt.option_value);
         Found = true;
         break;
       }
     }
     if (!Found) {
-      return make_error<StringError>("unknown option: " + K.str(), inconvertibleErrorCode());
+      return make_error<StringError>("unknown option: " + K.str(), 
+                                                    inconvertibleErrorCode());
     }
   }
 
   // Check all required options are set
   for (const auto &Opt : ReturnOptions) {
-    DEBUG_PRINT("Checking if set: " << Opt.option_name << " = '" << Opt.option_value << "' is_set=" << (Opt.is_set() ? "true" : "false"));
+    DEBUG_PRINT("Checking if set: " << Opt.option_name << " = '" 
+      << Opt.option_value << "' is_set=" << (Opt.is_set() ? "true" : "false"));
     if (!Opt.is_set()) {
-      return make_error<StringError>("missing required option: " + Opt.option_name, inconvertibleErrorCode());
+      return make_error<StringError>("missing required option: " + 
+                                    Opt.option_name, inconvertibleErrorCode());
     }
   }
 
@@ -221,40 +229,48 @@ static Expected<std::vector<Options>> ParseOptions(StringRef Params, const std::
 //   TargetOptions: Expected options with default values
 //
 // Returns:
-//   Expected<std::vector<Options>>: Parsed/default options on success, or error:
+//   Expected<std::vector<Options>>: Parsed/default options on success, or 
+//   error:
 //     - "name not matched": Name doesn't start with Base (not this pass)
 //     - "malformed parameterized pass name": Invalid <...> syntax
 //     - ParseOptions errors: Parameter parsing failures
-//     - "missing required option": Required option has no default and not provided
+//     - "missing required option": Required option has no default and not 
+//       provided
 //
 // Examples:
 //   MatchParamPass("ir-bb-label-pass", "ir-bb-label-pass", opts)
 //     -> Uses default values from opts
 //
-//   MatchParamPass("ir-bb-label-pass<output_csv=out.csv>", "ir-bb-label-pass", opts)
+//   MatchParamPass("ir-bb-label-pass<output_csv=out.csv>", "ir-bb-label-pass",
+//   opts)
 //     -> Parses "output_csv=out.csv" and returns modified opts
 //
 //   MatchParamPass("other-pass", "ir-bb-label-pass", opts)
 //     -> Returns "name not matched" error (different pass)
-static Expected<std::vector<Options>> MatchParamPass(StringRef Name, StringRef Base, const std::vector<Options> TargetOptions) {
+static Expected<std::vector<Options>> MatchParamPass(StringRef Name, 
+                  StringRef Base, const std::vector<Options> TargetOptions) {
   DEBUG_PRINT("MatchParamPass: Name='" << Name << "' Base='" << Base << "'");
   if (Name == Base) {
     // No parameters
     for (const auto &Opt : TargetOptions) {
       if (!Opt.is_set()) {
-        return make_error<StringError>("missing required option: " + Opt.option_name, inconvertibleErrorCode());
+        return make_error<StringError>("missing required option: " + 
+                                    Opt.option_name, inconvertibleErrorCode());
       }
     }
     return std::vector<Options>(TargetOptions);
   }
   if (!Name.starts_with(Base)) {
-    return make_error<StringError>("name not matched", inconvertibleErrorCode());
+    return make_error<StringError>("name not matched", 
+                                                    inconvertibleErrorCode());
   }
   if (Name.size() <= Base.size() + 2) { // must fit "<>"
-    return make_error<StringError>("malformed parameterized pass name", inconvertibleErrorCode());
+    return make_error<StringError>("malformed parameterized pass name", 
+                                                    inconvertibleErrorCode());
   }
   if (Name[Base.size()] != '<' || !Name.ends_with(">")) {
-    return make_error<StringError>("malformed parameterized pass name", inconvertibleErrorCode());
+    return make_error<StringError>("malformed parameterized pass name", 
+                                                    inconvertibleErrorCode());
   }
   StringRef Params = Name.drop_front(Base.size() + 1).drop_back(1);
   DEBUG_PRINT("extracted Params='" << Params << "'");

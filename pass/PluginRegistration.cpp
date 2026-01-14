@@ -32,8 +32,9 @@
 //
 // Plugin registration and pass manager integration.
 //
-// This file implements the LLVM pass plugin interface, registering custom passes
-// with the new pass manager. The llvmGetPassPluginInfo() function is the plugin
+// This file implements the LLVM pass plugin interface, registering custom 
+// passes with the new pass manager. 
+// The llvmGetPassPluginInfo() function is the plugin
 // entry point called by LLVM's plugin system when loading the shared library.
 //
 // Pass Registration Flow:
@@ -66,28 +67,39 @@ extern "C" LLVM_ATTRIBUTE_WEAK PassPluginLibraryInfo llvmGetPassPluginInfo() {
         // Registration callback - invoked during pass pipeline construction
         [](PassBuilder &PB) {
             // Register pipeline parsing callback for -passes="..." argument
-            // This callback is invoked for each pass name in the pipeline string
+            // This callback is invoked for each pass name in the pipeline 
+            // string
             PB.registerPipelineParsingCallback(
                 [](StringRef Name, ModulePassManager &MPM,
                    ArrayRef<PassBuilder::PipelineElement>) {
-                    DEBUG_PRINT("Pipeline parsing callback called with Name='" << Name << "'");
+                    DEBUG_PRINT("Pipeline parsing callback called with Name='" 
+                                                            << Name << "'");
                     
-                    // Attempt to match "ir-bb-label-pass" with optional parameters
+                    // Attempt to match "ir-bb-label-pass" with optional 
+                    // parameters
                     // MatchParamPass handles both forms:
                     //   1. "ir-bb-label-pass" (uses default options)
-                    //   2. "ir-bb-label-pass<output_csv=custom.csv>" (parsed options)
-                    auto E = MatchParamPass(Name, "ir-bb-label-pass", IRBBLabelPassOptions);
+                    //   2. "ir-bb-label-pass<output_csv=custom.csv>" 
+                    //       (parsed options)
+                    auto E = MatchParamPass(Name, "ir-bb-label-pass", 
+                                                        IRBBLabelPassOptions);
                     if (E) {
-                        // Success: add pass to module pass manager with parsed options
+                        // Success: add pass to module pass manager with parsed
+                        // options
                         MPM.addPass(IRBBLabelPass(*E));
                         return true;
                     } else {
-                        // Error: check if it was a real error or just name mismatch
+                        // Error: check if it was a real error or just name 
+                        // mismatch
                         std::string ErrorMsg = toString(E.takeError());
-                        // Only report errors if pass name matched but parameter parsing failed
-                        // (Don't spam errors for every unrelated pass name in pipeline)
-                        if (ErrorMsg.find("name not matched") == std::string::npos) {
-                            errs() << "ir-bb-label-pass param parse error: " << ErrorMsg << "\n";
+                        // Only report errors if pass name matched but 
+                        // parameter parsing failed
+                        // (Don't spam errors for every unrelated pass name in 
+                        // pipeline)
+                        if (ErrorMsg.find("name not matched") 
+                                                == std::string::npos) {
+                            errs() << "ir-bb-label-pass param parse error: " 
+                                                        << ErrorMsg << "\n";
                             return false;
                         }
                     }

@@ -64,12 +64,7 @@ class IRBBLabelPass : public PassInfoMixin<IRBBLabelPass> {
     // Constructor - Initializes pass with configuration options.
     //
     // Args:
-    //   Options: Vector of option key-value pairs (typically from MatchParamPass)
-  public:
-    // Constructor - Initializes pass with configuration options.
-    //
-    // Args:
-    //   Options: Vector of option key-value pairs (typically from MatchParamPass)
+    //   Options: Vector of option key-value pairs
     IRBBLabelPass(std::vector<Options> Options) {
         options_ = Options;
     }
@@ -83,13 +78,13 @@ class IRBBLabelPass : public PassInfoMixin<IRBBLabelPass> {
     // Fields are exported to CSV in the order declared.
     struct BasicBlockInfo {
         // Function metadata
-        std::string function_name;           // Function name (mangled for C++)
-        uint64_t function_id;                // Unique function identifier
+        std::string function_name;          // Function name (mangled for C++)
+        uint64_t function_id;               // Unique function identifier
 
         // Basic block metadata
-        std::string basic_block_name;        // BB label (empty for entry block)
-        uint64_t basic_block_inst_count;     // Number of instructions in BB
-        uint64_t basic_block_id;             // Globally unique BB identifier
+        std::string basic_block_name;       // BB label (empty for entry block)
+        uint64_t basic_block_inst_count;    // Number of instructions in BB
+        uint64_t basic_block_id;            // Globally unique BB identifier
     };
 
   private:

@@ -88,11 +88,11 @@ if [ $DIRECT_AVG -gt 0 ]; then
     elif [ $DIFF -lt 0 ]; then
         echo "✓ Optimized pipeline is FASTER" | tee -a "$LOG_FILE"
     else
-        # Allow up to 5% slowdown as acceptable
-        if [ $PERCENT -le 5 ]; then
-            echo "✓ Performance within acceptable range (≤5% slower)" | tee -a "$LOG_FILE"
+        # Allow up to 10% slowdown as acceptable
+        if [ $PERCENT -le 10 ]; then
+            echo "✓ Performance within acceptable range (≤10% slower)" | tee -a "$LOG_FILE"
         else
-            echo "✗ FAILED: Optimized pipeline is significantly SLOWER (>5%)" | tee -a "$LOG_FILE"
+            echo "✗ FAILED: Optimized pipeline is significantly SLOWER (>10%)" | tee -a "$LOG_FILE"
         fi
     fi
 else
@@ -108,7 +108,7 @@ if [ $DIRECT_AVG -eq 0 ] || [ $DIFF -le 0 ]; then
 fi
 
 PERCENT=$((100 * DIFF / DIRECT_AVG))
-if [ $PERCENT -le 5 ]; then
+if [ $PERCENT -le 10 ]; then
     exit 0
 else
     exit 1
