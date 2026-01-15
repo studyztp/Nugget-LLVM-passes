@@ -1,245 +1,105 @@
-// SPDX-License-Identifier: BSD-3-Clause
-// Copyright (c) 2026 Zhantong Qiu
-// All rights reserved.
-//
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are met:
-//
-// 1. Redistributions of source code must retain the above copyright notice, this
-//    list of conditions and the following disclaimer.
-//
-// 2. Redistributions in binary form must reproduce the above copyright notice,
-//    this list of conditions and the following disclaimer in the documentation
-//    and/or other materials provided with the distribution.
-//
-// 3. Neither the name of the copyright holder nor the names of its
-//    contributors may be used to endorse or promote products derived
-//    from this software without specific prior written permission.
-//
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-// FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-// DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-// SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-// CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-// OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#include "PhaseAnalysisPass.hh"
 
-
-#include "llvm/Transforms/Utils/PhaseAnalysis.h"
-
-namespace llvm {
-
-bool PhaseAnalysisPass::emptyFunction(Function &F) {
-  int count = 0;
-  for (auto &block : F) {
-    for (auto &inst : block) {
-      count++;
-    }
+bool PhaseAnalysisPass::instrumentRoiBegin(Module &M,
+                                const uint64_t total_basic_block_count) {
+  // First, find the nugget_roi_begin_ function
+  Function* roi_begin_function = M.getFunction("nugget_roi_begin_");
+  if (!roi_begin_function) {
+    errs() << "Function nugget_roi_begin_ not found\n";
+    return false;
   }
-  return count == 0;
-}
-
-void PhaseAnalysisPass::modifyROIFunctionsForBBV(Module &M) {
-  Function* roiBegin = M.getFunction("roi_begin_");
-  if (!roiBegin) {
-    errs() << "Function roi_begin_ not found\n";
+  Function* nugget_init_function = M.getFunction("nugget_init_");
+  if (!nugget_init_function) {
+    errs() << "Function nugget_init_ not found\n";
+    return false;
   }
-  Function* roiEnd = M.getFunction("roi_end_");
-  if (!roiEnd) {
-    errs() << "Function roi_end_ not found\n";
-  }
-
-  Function* initArraysFunction = M.getFunction("init_array");
-  if (!initArraysFunction) {
-    errs() << "Function init_arrays not found\n";
-  }
-
-
+  // Insert nugget_init_ call at the beginning of nugget_roi_begin_
   IRBuilder<> builder(M.getContext());
-
-  builder.SetInsertPoint(roiBegin->back().getTerminator());
-  builder.CreateCall(initArraysFunction, {
-    ConstantInt::get(Type::getInt64Ty(M.getContext()), totalBasicBlockCount)
+  builder.SetInsertPoint(roi_begin_function->back().getTerminator());
+  builder.CreateCall(nugget_init_function, {
+    ConstantInt::get(Type::getInt64Ty(M.getContext()), total_basic_block_count)
   });
-
+  return true;
 }
 
-void PhaseAnalysisPass::instrumentBBVAnalysis(Module &M) {
-  IRBuilder<> builder(M.getContext());
-
-  std::string bbHookFunctionName = "";
-  for (auto& function : M.getFunctionList()) {
-    if (function.getName().str().find("bb_hook") != std::string::npos) {
-      bbHookFunctionName = function.getName().str();
-    }
-  }
-
-  Function* BBHookFunction = M.getFunction(bbHookFunctionName);
-  if (!BBHookFunction) {
-    errs() << "Function " << bbHookFunctionName<< " not found\n";
-  }
-
-  for (auto item : basicBlockList) {
-    if (item.basicBlock->getTerminator()) {
-      builder.SetInsertPoint(item.basicBlock->getTerminator());
-    } else {
-      errs() << "Could not find terminator point for fucntion " << item.functionName << " bbid " << item.basicBlockId << "\n";
-      builder.SetInsertPoint(item.basicBlock->getFirstInsertionPt());
-    }
-    CallInst* main_instrument = builder.CreateCall(BBHookFunction, {
-      ConstantInt::get(Type::getInt64Ty(M.getContext()), item.basicBlockCount),
-      ConstantInt::get(Type::getInt64Ty(M.getContext()), item.basicBlockId),
-      ConstantInt::get(Type::getInt64Ty(M.getContext()), threshold),
-    });
-
-  }
-
-  modifyROIFunctionsForBBV(M);
-}
-
-void PhaseAnalysisPass::instrumentPapiAnalysis(Module &M) {
-  IRBuilder<> builder(M.getContext());
-
-  std::string bbHookFunctionName = "";
-  for (auto& function : M.getFunctionList()) {
-    if (function.getName().str().find("bb_hook") != std::string::npos) {
-      bbHookFunctionName = function.getName().str();
-    }
-  }
-
-  Function* BBHookFunction = M.getFunction(bbHookFunctionName);
-  if (!BBHookFunction) {
-    errs() << "Function " << bbHookFunctionName<< " not found\n";
-  }
-
-  for (auto item : basicBlockList) {
-    if (item.basicBlock->getTerminator()) {
-      builder.SetInsertPoint(item.basicBlock->getTerminator());
-    } else {
-      errs() << "Could not find terminator point for fucntion " << item.functionName << " bbid " << item.basicBlockId << "\n";
-      builder.SetInsertPoint(item.basicBlock->getFirstInsertionPt());
-    }
-        // Call the instrumentation function with the basic block count as the argument
-        // (this is the number of instructions in the basic block
-    CallInst* main_instrument = builder.CreateCall(BBHookFunction, {
-      ConstantInt::get(Type::getInt64Ty(M.getContext()), item.basicBlockCount),
-      ConstantInt::get(Type::getInt64Ty(M.getContext()), threshold),
-    });
-  }
+bool PhaseAnalysisPass::instrumentAllIRBasicBlocks(Module &M, 
+                  int64_t &total_basic_block_count, const uint64_t threshold) {
   
-}
-
-cl::opt<std::string> PhaseAnalysisOutputFilename(
-  "phase-analysis-output-file", 
-  cl::init("basicBlockList.txt"),
-  cl::desc("<output file>"),
-  cl::ValueRequired
-);
-
-cl::opt<uint64_t> PhaseAnalysisRegionLength(
-  "phase-analysis-region-length",
-  cl::init(100000000),
-  cl::desc("<region length>"),
-  cl::ValueRequired
-);
-
-cl::opt<bool> PhaseAnalysisUsingPapi(
-  "phase-analysis-using-papi",
-  cl::init(false),
-  cl::desc("<using papi>"),
-  cl::ValueRequired
-);
-
-PreservedAnalyses PhaseAnalysisPass::run(Module &M, ModuleAnalysisManager &AM) 
-{
-  std::error_code EC;
-  raw_fd_ostream out(PhaseAnalysisOutputFilename.c_str(), EC, sys::fs::OF_Text);
-  if (EC) {
-    errs() << "Could not open file: " << EC.message() << "\n";
+  Function* bb_hook_function = M.getFunction("nugget_bb_hook_");
+  if (!bb_hook_function) {
+    errs() << "Function nugget_bb_hook_ not found\n";
+    return false;
   }
-  threshold = PhaseAnalysisRegionLength;
-  errs() << "Threshold: " << threshold << "\n";
-  usingPapiToAnalyze = PhaseAnalysisUsingPapi;
 
   IRBuilder<> builder(M.getContext());
+  int64_t bb_id = -1;
+  total_basic_block_count = 0;
+  for (Function &F : M) {
+    if (F.isDeclaration()) continue;
 
-  totalFunctionCount = 0;
-  totalBasicBlockCount = 0;
-
-  // find all basic blocks that will be instrumented
-  for (auto& function : M.getFunctionList()) {
-    std::string functionName = function.getName().str();
-    if (emptyFunction(function) || function.isDeclaration()) 
-    {
-      continue;
+    // Skip function if it is one of the nugget helper functions
+    if (std::find(nugget_functions.begin(), nugget_functions.end(),
+                  F.getName().str()) != nugget_functions.end()) {
+        continue;
     }
 
-    if (function.hasFnAttribute(Attribute::NoProfile)) {
-      errs() << "Skipping function: " << function.getName() << "\n";
-      continue;
-    }
-
-    if (functionName.find("_GLOBAL__sub_I_") != std::string::npos ||
-      functionName.find("__cxx_global_var_init") != std::string::npos ||
-      functionName.find("_ZNSt13__atomic_") != std::string::npos ||
-      functionName.find("_ZStanSt12memory_orderSt23__memory_order_modifier") != std::string::npos ||
-      functionName.find("__clang_call_terminate") != std::string::npos ||
-      functionName.find("_ZNSt13__atomic_baseImEaSEm") != std::string::npos ||
-      functionName.find("cxx119to_string") != std::string::npos ||
-      functionName.find("cxx1112basic_string") != std::string::npos) {
-      // This is an auto-generated function, skip it
-      continue;
-    }
-
-    basicBlockInfo basicBlock;
-    basicBlock.functionName = function.getName();
-    basicBlock.functionId = totalFunctionCount;
-    
-    totalFunctionCount++;
-    bool ifStartOfFunction = true;
-    for (auto& block : function) {
-      if (ifStartOfFunction) {
-        basicBlock.ifStartOfFunction = true;
-        ifStartOfFunction = false;
+    for (BasicBlock &BB : F) {
+      // Get the bb_id metadata
+      bb_id = -1;
+      Instruction *T = BB.getTerminator();
+      if (T) {
+          MDNode* bb_id_md = T->getMetadata(kBbIdKey);
+          if (!bb_id_md) {
+              errs() << "Warning: BasicBlock " << BB.getName()
+                    << " in function " << F.getName()
+                    << " is missing !bb.id metadata.\n";
+              continue;
+          }
+          
+          // Cast operand to MDString and extract the value
+          MDString *bb_id_str = dyn_cast<MDString>(bb_id_md->getOperand(0));
+          if (!bb_id_str) {
+              errs() << "Warning: Invalid bb.id metadata format\n";
+              continue;
+          }
+          bb_id = std::stoll(bb_id_str->getString().str());
+      } else {
+        errs() << "Could not find terminator for function " << F.getName() 
+                                            << " bb " << BB.getName() << "\n";
+        continue;
       }
+      assert(bb_id != -1 && "bb_id should have been set from metadata");
+      builder.SetInsertPoint(T);
 
-      basicBlock.basicBlockName = block.getName();
-      basicBlock.basicBlockCount = block.size();
-      basicBlock.basicBlockId = totalBasicBlockCount;
-      basicBlock.function = &function;
-      basicBlock.basicBlock = &block;
-      totalBasicBlockCount++;
-      basicBlockList.push_back(basicBlock);
+      builder.CreateCall(bb_hook_function, {
+        ConstantInt::get(Type::getInt64Ty(M.getContext()), BB.size()),
+        ConstantInt::get(Type::getInt64Ty(M.getContext()), bb_id),
+        ConstantInt::get(Type::getInt64Ty(M.getContext()), threshold),
+      });
+      total_basic_block_count++;
     }
   }
+  return true;
+}
 
-  if (usingPapiToAnalyze) {
-    instrumentPapiAnalysis(M);
-  } else {
-    instrumentBBVAnalysis(M);
+PreservedAnalyses PhaseAnalysisPass::run(Module &M, ModuleAnalysisManager &) {
+  LLVMContext &C = M.getContext();
+
+  // First, instrument every basic block in every function
+  // Then, insert nugget_init_call at the nugget_roi_begin_ function
+  int64_t total_basic_block_count = -1;
+
+  uint64_t threshold = std::stoull(GetOptionValue(options_, 
+                                                          "interval_length"));
+  if (!instrumentAllIRBasicBlocks(M, total_basic_block_count, 
+                                                        threshold)) {
+    report_fatal_error("Error instrumenting basic blocks");
   }
-
-  out << "[functionID:functionName] [basicBlockID:basicBlockName:basicBlockIRInstCount] \n";
-
-  std::string workingFunctionName = "";
-
-  for (auto item : basicBlockList) {
-    if (workingFunctionName != item.functionName) {
-      if (workingFunctionName != ""){
-        out << "\n";
-      }
-      workingFunctionName = item.functionName;
-      out << "[" << item.functionId << ":" << item.functionName << "]";
-    }
-    out << " [" << item.basicBlockId << ":" << item.basicBlockName << ":" << item.basicBlockCount << "] ";
+  assert(total_basic_block_count >= 1 && 
+                "There should be at least one basic block instrumented");
+  if (!instrumentRoiBegin(M, total_basic_block_count)) {
+    report_fatal_error("Error instrumenting nugget_roi_begin_");
   }
-
-  out.close();
-  
   return PreservedAnalyses::all();
-}
 
-} // end llvm namespace
+}

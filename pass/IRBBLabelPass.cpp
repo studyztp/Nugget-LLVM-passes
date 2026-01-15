@@ -87,11 +87,11 @@ PreservedAnalyses IRBBLabelPass::run(Module &M, ModuleAnalysisManager &) {
                                                     C, std::to_string(bb_id)));
                 T->setMetadata(kBbIdKey, N);
             } else {
-                // Warn if basic block has no terminator (malformed IR)
+                // Fatal error if basic block has no terminator (malformed IR)
                 // This should never happen with valid LLVM IR
-                errs() << "Warning: BasicBlock " << BB.getName()
-                        << " in function " << F.getName()
-                        << " has no terminator instruction.\n";
+                report_fatal_error(Twine("BasicBlock ") + BB.getName() +
+                        " in function " + F.getName() +
+                        " has no terminator instruction.");
             }
 
             // Collect basic block information for CSV export
@@ -117,11 +117,10 @@ PreservedAnalyses IRBBLabelPass::run(Module &M, ModuleAnalysisManager &) {
     // File path is specified in options_[0].option_value (default: 
     //                                                          "bb_info.csv")
     std::error_code EC;
-    raw_fd_ostream csv_file(options_[0].option_value, EC, sys::fs::OF_Text);
+    raw_fd_ostream csv_file(GetOptionValue(options_, "output_csv"), EC, sys::fs::OF_Text);
     if (EC) {
-        errs() << "Error opening file " << options_[0].option_value
-               << ": " << EC.message() << "\n";
-        return PreservedAnalyses::all();
+        report_fatal_error(Twine("Error opening file ") + GetOptionValue(options_, "output_csv")
+               + ": " + EC.message());
     }
     
     // Write CSV header row

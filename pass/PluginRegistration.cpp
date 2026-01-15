@@ -29,6 +29,7 @@
 
 
 #include "IRBBLabelPass.hh"
+#include "PhaseAnalysisPass.hh"
 //
 // Plugin registration and pass manager integration.
 //
@@ -99,6 +100,22 @@ extern "C" LLVM_ATTRIBUTE_WEAK PassPluginLibraryInfo llvmGetPassPluginInfo() {
                         if (ErrorMsg.find("name not matched") 
                                                 == std::string::npos) {
                             errs() << "ir-bb-label-pass param parse error: " 
+                                                        << ErrorMsg << "\n";
+                            return false;
+                        }
+                    }
+                    
+                    // Check if it's the PhaseAnalysisPass
+                    auto E2 = MatchParamPass(Name, "phase-analysis-pass", 
+                                              PhaseAnalysisPassOptions);
+                    if (E2) {
+                        MPM.addPass(PhaseAnalysisPass(*E2));
+                        return true;
+                    } else {
+                        std::string ErrorMsg = toString(E2.takeError());
+                        if (ErrorMsg.find("name not matched") 
+                                                == std::string::npos) {
+                            errs() << "phase-analysis-pass param parse error: " 
                                                         << ErrorMsg << "\n";
                             return false;
                         }

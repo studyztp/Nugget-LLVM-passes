@@ -129,12 +129,24 @@ struct Options {
   }
 };
 
-// Helper functions related to initialization and roi bounding.
+// Helper function names related to initialization and roi bounding.
 const std::vector<std::string> nugget_functions = {
     "nugget_init_",
     "nugget_roi_begin_",
-    "nugget_roi_end_"
+    "nugget_roi_end_",
+    "nugget_bb_hook_"
 };
+
+// Helper function to get the option value by name.
+static std::string GetOptionValue(const std::vector<Options> &options, 
+                                                    const std::string &name) {
+  for (const auto &opt : options) {
+    if (opt.option_name == name) {
+      return opt.option_value;
+    }
+  }
+  return "";
+}
 
 // Parses pass parameter string into Options vector.
 //

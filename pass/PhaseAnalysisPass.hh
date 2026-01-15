@@ -33,11 +33,30 @@
 
 #include "common.hh"
 
+const std::vector<Options> PhaseAnalysisPassOptions = {
+    {"interval_length", ""}, // Length in terms of IR instruction executed
+};
+
 // PhaseAnalysisPass - instrument every basic block to collect runtime data
 // It expects every IR basic block is labeled with metadata from IRBBLabel pass
 // This is important because it ensures the IR basic block identify remains
 // stable.
 
-
+class PhaseAnalysisPass : public PassInfoMixin<PhaseAnalysisPass> {
+  public:
+    PhaseAnalysisPass(std::vector<Options> Options)
+    {
+        options_ = Options;
+    }
+    ~PhaseAnalysisPass() = default;
+  private:
+    std::vector<Options> options_;
+    bool instrumentRoiBegin(Module &M, const uint64_t total_basic_block_count);
+    bool instrumentAllIRBasicBlocks(Module &M, 
+                  int64_t &total_basic_block_count, const uint64_t threshold);
+  
+  public:
+    PreservedAnalyses run(Module &M, ModuleAnalysisManager &);
+};
 
 #endif // LLVM_TRANSFORMS_UTILS_PHASEANALYSIS_H

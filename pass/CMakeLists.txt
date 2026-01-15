@@ -99,6 +99,7 @@ include(AddLLVM)
 add_llvm_pass_plugin(NuggetPasses
   PluginRegistration.cpp
   IRBBLabelPass.cpp
+  PhaseAnalysisPass.cpp
   PARTIAL_SOURCES_INTENDED
 )
 
