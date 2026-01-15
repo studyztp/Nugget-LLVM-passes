@@ -65,7 +65,7 @@ def parse_csv(csv_file):
 
 
 def check_nugget_init_in_roi_begin(ir_content, total_bb_count):
-    """Check that nugget_init_ is called in nugget_roi_begin_ with correct arg."""
+    """Check that nugget_init is called in nugget_roi_begin_ with correct arg."""
     errors = []
     
     # Find nugget_roi_begin_ function
@@ -80,18 +80,18 @@ def check_nugget_init_in_roi_begin(ir_content, total_bb_count):
     
     roi_begin_body = roi_begin_match.group(1)
     
-    # Check for nugget_init_ call with the correct total_bb_count argument
-    init_call_pattern = rf'call\s+void\s+@nugget_init_\s*\(\s*i64\s+{total_bb_count}\s*\)'
+    # Check for nugget_init call with the correct total_bb_count argument
+    init_call_pattern = rf'call\s+void\s+@nugget_init\s*\(\s*i64\s+{total_bb_count}\s*\)'
     if not re.search(init_call_pattern, roi_begin_body):
-        # Try to find any nugget_init_ call to report what was found
-        any_init_call = re.search(r'call\s+void\s+@nugget_init_\s*\([^)]*\)', roi_begin_body)
+        # Try to find any nugget_init call to report what was found
+        any_init_call = re.search(r'call\s+void\s+@nugget_init\s*\([^)]*\)', roi_begin_body)
         if any_init_call:
             errors.append(
-                f"nugget_init_ called but with wrong argument. "
+                f"nugget_init called but with wrong argument. "
                 f"Expected total_bb_count={total_bb_count}, found: {any_init_call.group(0)}"
             )
         else:
-            errors.append("nugget_init_ is NOT called in nugget_roi_begin_")
+            errors.append("nugget_init is NOT called in nugget_roi_begin_")
     
     return errors
 
@@ -101,7 +101,7 @@ def check_bb_hooks(ir_content, bb_info, expected_threshold):
     errors = []
     
     # Get all function bodies (excluding nugget helper functions)
-    nugget_functions = {'nugget_init_', 'nugget_roi_begin_', 'nugget_roi_end_', 'nugget_bb_hook_'}
+    nugget_functions = {'nugget_init', 'nugget_roi_begin_', 'nugget_roi_end_', 'nugget_bb_hook'}
     
     # Parse functions and their basic blocks
     function_pattern = re.compile(
@@ -109,8 +109,18 @@ def check_bb_hooks(ir_content, bb_info, expected_threshold):
         re.DOTALL
     )
     
-    # Build expected bb_ids from CSV
-    expected_bb_ids = {bb['bb_id'] for bb in bb_info}
+    # Build expected bb_ids from CSV, ignoring helper/runtime functions that we
+    # intentionally do not instrument (avoids false "missing" reports).
+    helper_funcs = {
+        'nugget_init_', 'nugget_roi_begin_', 'nugget_roi_end_',
+        'nugget_bb_hook_', 'nugget_warmup_marker_hook_',
+        'nugget_start_marker_hook_', 'nugget_end_marker_hook_'
+    }
+    expected_bb_ids = {
+        bb['bb_id']
+        for bb in bb_info
+        if bb['function_name'] not in helper_funcs
+    }
     found_bb_hook_calls = set()
     
     for func_match in function_pattern.finditer(ir_content):
@@ -121,9 +131,9 @@ def check_bb_hooks(ir_content, bb_info, expected_threshold):
         if func_name in nugget_functions:
             continue
         
-        # Find all nugget_bb_hook_ calls in this function
+        # Find all nugget_bb_hook calls in this function
         hook_pattern = re.compile(
-            r'call\s+void\s+@nugget_bb_hook_\s*\(\s*i64\s+(\d+)\s*,\s*i64\s+(\d+)\s*,\s*i64\s+(\d+)\s*\)'
+            r'call\s+void\s+@nugget_bb_hook\s*\(\s*i64\s+(\d+)\s*,\s*i64\s+(\d+)\s*,\s*i64\s+(\d+)\s*\)'
         )
         
         for hook_match in hook_pattern.finditer(func_body):
@@ -149,12 +159,12 @@ def check_bb_hooks(ir_content, bb_info, expected_threshold):
     # Check all expected BBs have hook calls
     missing_hooks = expected_bb_ids - found_bb_hook_calls
     if missing_hooks:
-        errors.append(f"Missing nugget_bb_hook_ calls for BB IDs: {sorted(missing_hooks)}")
+        errors.append(f"Missing nugget_bb_hook calls for BB IDs: {sorted(missing_hooks)}")
     
     # Check no extra hook calls
     extra_hooks = found_bb_hook_calls - expected_bb_ids
     if extra_hooks:
-        errors.append(f"Unexpected nugget_bb_hook_ calls for BB IDs: {sorted(extra_hooks)}")
+        errors.append(f"Unexpected nugget_bb_hook calls for BB IDs: {sorted(extra_hooks)}")
     
     return errors
 
@@ -199,8 +209,8 @@ def main():
         sys.exit(1)
     else:
         print("✓ Instrumentation validation PASSED")
-        print(f"  - nugget_init_ called with total_bb_count={total_bb_count}")
-        print(f"  - {total_bb_count} basic blocks instrumented with nugget_bb_hook_")
+        print(f"  - nugget_init called with total_bb_count={total_bb_count}")
+        print(f"  - {total_bb_count} basic blocks instrumented with nugget_bb_hook")
         print(f"  - threshold={expected_threshold}")
         sys.exit(0)
 

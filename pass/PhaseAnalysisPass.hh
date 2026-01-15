@@ -28,8 +28,8 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
-#ifndef LLVM_TRANSFORMS_UTILS_PHASEANALYSIS_H
-#define LLVM_TRANSFORMS_UTILS_PHASEANALYSIS_H
+#ifndef _PHASEANALYSISPASS_HH_
+#define _PHASEANALYSISPASS_HH_
 
 #include "common.hh"
 
@@ -51,7 +51,6 @@ class PhaseAnalysisPass : public PassInfoMixin<PhaseAnalysisPass> {
     ~PhaseAnalysisPass() = default;
   private:
     std::vector<Options> options_;
-    bool instrumentRoiBegin(Module &M, const uint64_t total_basic_block_count);
     bool instrumentAllIRBasicBlocks(Module &M, 
                   int64_t &total_basic_block_count, const uint64_t threshold);
   
@@ -59,4 +58,4 @@ class PhaseAnalysisPass : public PassInfoMixin<PhaseAnalysisPass> {
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &);
 };
 
-#endif // LLVM_TRANSFORMS_UTILS_PHASEANALYSIS_H
+#endif // _PHASEANALYSISPASS_HH_

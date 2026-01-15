@@ -116,6 +116,22 @@ endif()
 enable_testing()
 
 # ============================================================================
+# Architecture Detection for Test 2
+# ============================================================================
+# Test 2 requires disassembly trace which is architecture-specific
+# Currently supported: x86_64, aarch64
+set(TEST2_SUPPORTED_ARCH FALSE)
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|amd64")
+    set(TEST2_SUPPORTED_ARCH TRUE)
+    message(STATUS "Test 2 architecture: x86-64 (supported)")
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64|ARM64")
+    set(TEST2_SUPPORTED_ARCH TRUE)
+    message(STATUS "Test 2 architecture: AArch64 (supported)")
+else()
+    message(WARNING "Test 2 (machine match) skipped: architecture '${CMAKE_SYSTEM_PROCESSOR}' not supported for disassembly trace. Supported architectures: x86-64, AArch64.")
+endif()
+
+# ============================================================================
 # Add test subdirectories
 # ============================================================================
 # Each subdirectory contains a test case with its own CMakeLists.txt.
@@ -123,7 +139,9 @@ enable_testing()
 
 add_subdirectory(test1_simple)         # Basic instrumentation test
 
-# Test 2 requires llc for machine code generation
-if(LLC_EXECUTABLE)
+# Test 2 requires llc for machine code generation and supported architecture
+if(LLC_EXECUTABLE AND TEST2_SUPPORTED_ARCH)
     add_subdirectory(test2_machine_match)  # IR to machine code matching
+elseif(LLC_EXECUTABLE AND NOT TEST2_SUPPORTED_ARCH)
+    message(STATUS "Test 2 skipped: Architecture not supported (see warning above)")
 endif()

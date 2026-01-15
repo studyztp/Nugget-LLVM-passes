@@ -20,7 +20,7 @@ Before running these tests, ensure:
    ```bash
    cd ../../pass
    mkdir -p build && cd build
-   cmake .. -DLLVM_DIR=/usr/lib/llvm-18/lib/cmake/llvm
+   cmake .. -DLLVM_DIR=/path/to/LLVM/lib/cmake/llvm
    make
    ```
 
@@ -32,8 +32,8 @@ Before running these tests, ensure:
 ```bash
 mkdir -p build && cd build
 cmake .. \
-  -DLLVM_BIN_DIR=/usr/lib/llvm-18/bin \
-  -DPASS_PLUGIN=../../pass/build/NuggetPasses.so
+  -DLLVM_BIN_DIR=/path/to/LLVM/bin \
+  -DPASS_PLUGIN=path/to/NuggetPasses.so
 make
 ```
 

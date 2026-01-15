@@ -30,6 +30,8 @@
 
 #include "IRBBLabelPass.hh"
 #include "PhaseAnalysisPass.hh"
+#include "PhaseBoundPass.hh"
+
 //
 // Plugin registration and pass manager integration.
 //

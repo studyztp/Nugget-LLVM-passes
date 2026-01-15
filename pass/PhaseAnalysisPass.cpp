@@ -1,33 +1,11 @@
 #include "PhaseAnalysisPass.hh"
 
-bool PhaseAnalysisPass::instrumentRoiBegin(Module &M,
-                                const uint64_t total_basic_block_count) {
-  // First, find the nugget_roi_begin_ function
-  Function* roi_begin_function = M.getFunction("nugget_roi_begin_");
-  if (!roi_begin_function) {
-    errs() << "Function nugget_roi_begin_ not found\n";
-    return false;
-  }
-  Function* nugget_init_function = M.getFunction("nugget_init_");
-  if (!nugget_init_function) {
-    errs() << "Function nugget_init_ not found\n";
-    return false;
-  }
-  // Insert nugget_init_ call at the beginning of nugget_roi_begin_
-  IRBuilder<> builder(M.getContext());
-  builder.SetInsertPoint(roi_begin_function->back().getTerminator());
-  builder.CreateCall(nugget_init_function, {
-    ConstantInt::get(Type::getInt64Ty(M.getContext()), total_basic_block_count)
-  });
-  return true;
-}
-
 bool PhaseAnalysisPass::instrumentAllIRBasicBlocks(Module &M, 
                   int64_t &total_basic_block_count, const uint64_t threshold) {
   
-  Function* bb_hook_function = M.getFunction("nugget_bb_hook_");
+  Function* bb_hook_function = M.getFunction("nugget_bb_hook");
   if (!bb_hook_function) {
-    errs() << "Function nugget_bb_hook_ not found\n";
+    errs() << "Function nugget_bb_hook not found\n";
     return false;
   }
 
@@ -97,7 +75,9 @@ PreservedAnalyses PhaseAnalysisPass::run(Module &M, ModuleAnalysisManager &) {
   }
   assert(total_basic_block_count >= 1 && 
                 "There should be at least one basic block instrumented");
-  if (!instrumentRoiBegin(M, total_basic_block_count)) {
+  Value* total_bb_count_arg = ConstantInt::get(
+        Type::getInt64Ty(C), total_basic_block_count);
+  if (!instrumentRoiBegin(M, {total_bb_count_arg})) {
     report_fatal_error("Error instrumenting nugget_roi_begin_");
   }
   return PreservedAnalyses::all();

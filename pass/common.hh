@@ -130,11 +130,18 @@ struct Options {
 };
 
 // Helper function names related to initialization and roi bounding.
+// Use the fully mangled (trailing underscore) names so we reliably skip
+// instrumenting the helper/runtime functions themselves. Instrumenting them
+// causes self-recursion (e.g., nugget_bb_hook_ calling itself) and test
+// failures/segfaults.
 const std::vector<std::string> nugget_functions = {
-    "nugget_init_",
-    "nugget_roi_begin_",
-    "nugget_roi_end_",
-    "nugget_bb_hook_"
+  "nugget_init",
+  "nugget_roi_begin_",
+  "nugget_roi_end_",
+  "nugget_bb_hook",
+  "nugget_warmup_marker_hook",
+  "nugget_start_marker_hook",
+  "nugget_end_marker_hook"
 };
 
 // Helper function to get the option value by name.
@@ -294,6 +301,26 @@ static Expected<std::vector<Options>> MatchParamPass(StringRef Name,
   StringRef Params = Name.drop_front(Base.size() + 1).drop_back(1);
   DEBUG_PRINT("extracted Params='" << Params << "'");
   return ParseOptions(Params, TargetOptions);
+}
+
+static bool instrumentRoiBegin(Module &M,
+                              std::vector<Value*> args) {
+  // First, find the nugget_roi_begin_ function
+  Function* roi_begin_function = M.getFunction("nugget_roi_begin_");
+  if (!roi_begin_function) {
+    errs() << "Function nugget_roi_begin_ not found\n";
+    return false;
+  }
+  Function* nugget_init_function = M.getFunction("nugget_init");
+  if (!nugget_init_function) {
+    errs() << "Function nugget_init not found\n";
+    return false;
+  }
+  // Insert nugget_init call at the beginning of nugget_roi_begin_
+  IRBuilder<> builder(M.getContext());
+  builder.SetInsertPoint(roi_begin_function->back().getTerminator());
+  builder.CreateCall(nugget_init_function, args);
+  return true;
 }
 
 #endif // _COMMON_HH_

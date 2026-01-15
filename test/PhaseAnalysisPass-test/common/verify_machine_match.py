@@ -15,7 +15,7 @@
 #   2. The (inst_count, bb_id, interval) arguments in ASM match the IR
 #   3. Missing hooks (IR -> ASM) are explained with evidence of optimization
 #   4. No spurious hooks appear in unexpected places
-#   5. nugget_init_ is called in nugget_roi_begin_
+#   5. nugget_init is called in nugget_roi_begin_
 #
 # Usage:
 #   python3 verify_machine_match.py <instrumented.ll> <disassembly.txt> <bb_info.csv> <interval_length>
@@ -46,7 +46,7 @@ class ArchHandler(ABC):
     
     @abstractmethod
     def get_call_pattern(self):
-        """Return regex pattern to match calls to nugget_bb_hook_."""
+        """Return regex pattern to match calls to nugget_bb_hook."""
         pass
     
     @abstractmethod
@@ -93,7 +93,7 @@ class X86_64Handler(ArchHandler):
         return aliases.get(reg_name, [reg_name])
     
     def get_call_pattern(self):
-        return re.compile(r'([0-9a-f]+):\s+.*call\s+[0-9a-f]+\s+<nugget_bb_hook_>')
+        return re.compile(r'([0-9a-f]+):\s+.*call\s+[0-9a-f]+\s+<nugget_bb_hook>')
     
     def get_mov_imm_pattern(self):
         # Matches: mov $0x123,%edi  or  mov $123,%rsi
@@ -136,7 +136,7 @@ class AArch64Handler(ArchHandler):
     
     def get_call_pattern(self):
         # AArch64 uses 'bl' for function calls
-        return re.compile(r'([0-9a-f]+):\s+.*\bbl\s+[0-9a-f]+\s+<nugget_bb_hook_>')
+        return re.compile(r'([0-9a-f]+):\s+.*\bbl\s+[0-9a-f]+\s+<nugget_bb_hook>')
     
     def get_mov_imm_pattern(self):
         # Matches: mov w0, #0x123  or  mov x1, #456  or  movz w0, #0x123
@@ -218,7 +218,7 @@ def parse_csv(csv_path):
 
 
 def parse_ir_hooks(ir_path):
-    """Parse the instrumented IR and extract all nugget_bb_hook_ calls with context."""
+    """Parse the instrumented IR and extract all nugget_bb_hook calls with context."""
     ir_hooks = {}  # bb_id -> hook info
     current_function = None
     current_bb = None
@@ -226,7 +226,7 @@ def parse_ir_hooks(ir_path):
     # Patterns for parsing IR
     func_pattern = re.compile(r'^define\s+.*@(\w+)\s*\(')
     bb_pattern = re.compile(r'^([a-zA-Z0-9_.]+):\s*;?\s*preds')
-    hook_pattern = re.compile(r'call void @nugget_bb_hook_\(i64\s+(\d+),\s*i64\s+(\d+),\s*i64\s+(\d+)\)')
+    hook_pattern = re.compile(r'call void @nugget_bb_hook\(i64\s+(\d+),\s*i64\s+(\d+),\s*i64\s+(\d+)\)')
     
     with open(ir_path, 'r') as f:
         for line in f:
@@ -262,7 +262,7 @@ def parse_ir_hooks(ir_path):
 
 def parse_disassembly_hooks_detailed(disasm_path, arch_handler):
     """
-    Parse disassembly and extract nugget_bb_hook_ calls with their arguments.
+    Parse disassembly and extract nugget_bb_hook calls with their arguments.
     Returns list of dicts with function, address, inst_count, bb_id, interval.
     
     This parser works by reading the file, storing all lines, and then for each
@@ -416,7 +416,7 @@ def parse_disassembly_hooks_detailed(disasm_path, arch_handler):
 
 
 def verify_init_call(disasm_path, arch_handler):
-    """Verify nugget_init_ is called in nugget_roi_begin_."""
+    """Verify nugget_init is called in nugget_roi_begin_."""
     in_roi_begin = False
     init_found = False
     
@@ -424,9 +424,9 @@ def verify_init_call(disasm_path, arch_handler):
     
     # Architecture-specific call pattern
     if isinstance(arch_handler, AArch64Handler):
-        call_init_pattern = re.compile(r'\bbl\s+.*nugget_init_')
+        call_init_pattern = re.compile(r'\bbl\s+.*nugget_init\b')
     else:
-        call_init_pattern = re.compile(r'call.*nugget_init_')
+        call_init_pattern = re.compile(r'call.*nugget_init\b')
     
     with open(disasm_path, 'r') as f:
         for line in f:
@@ -487,7 +487,7 @@ def main():
     # Parse IR hooks
     try:
         ir_hooks = parse_ir_hooks(ir_path)
-        print(f"IR:  {len(ir_hooks)} nugget_bb_hook_ calls")
+        print(f"IR:  {len(ir_hooks)} nugget_bb_hook calls")
     except Exception as e:
         print(f"ERROR: Failed to parse IR: {e}")
         sys.exit(1)
@@ -495,22 +495,22 @@ def main():
     # Parse ASM hooks with arguments
     try:
         asm_hooks = parse_disassembly_hooks_detailed(disasm_path, arch_handler)
-        print(f"ASM: {len(asm_hooks)} nugget_bb_hook_ calls")
+        print(f"ASM: {len(asm_hooks)} nugget_bb_hook calls")
     except Exception as e:
         print(f"ERROR: Failed to parse disassembly: {e}")
         sys.exit(1)
     
     print()
     print("-" * 70)
-    print("Verification Step 1: Check nugget_init_ call")
+    print("Verification Step 1: Check nugget_init call")
     print("-" * 70)
     
     init_found = verify_init_call(disasm_path, arch_handler)
     if init_found:
-        print("✓ nugget_init_ is called in nugget_roi_begin_")
+        print("✓ nugget_init is called in nugget_roi_begin_")
     else:
-        errors.append("nugget_init_ not found in nugget_roi_begin_")
-        print("✗ nugget_init_ NOT found in nugget_roi_begin_")
+        errors.append("nugget_init not found in nugget_roi_begin_")
+        print("✗ nugget_init NOT found in nugget_roi_begin_")
     
     print()
     print("-" * 70)

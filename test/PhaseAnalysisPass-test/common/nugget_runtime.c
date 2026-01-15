@@ -38,14 +38,14 @@
 
 #include <stdint.h>
 
-// nugget_init_ - Initialize the runtime with total basic block count.
+// nugget_init - Initialize the runtime with total basic block count.
 //
 // Called at the end of nugget_roi_begin_ after PhaseAnalysisPass instruments it.
 // In production, this would allocate data structures for tracking BB execution.
 //
 // Args:
 //   total_bb_count: Total number of basic blocks in the instrumented program
-void nugget_init_(uint64_t total_bb_count) {
+void nugget_init(uint64_t total_bb_count) {
     // Stub implementation - does nothing in test
     // Production would: allocate counters array of size total_bb_count
     (void)total_bb_count;
@@ -70,7 +70,7 @@ void nugget_roi_end_(void) {
     // Production would: dump collected phase data
 }
 
-// nugget_bb_hook_ - Called at the end of each basic block.
+// nugget_bb_hook - Called at the end of each basic block.
 //
 // PhaseAnalysisPass inserts a call to this function at the end of every
 // labeled basic block. This is the main instrumentation hook.
@@ -79,7 +79,7 @@ void nugget_roi_end_(void) {
 //   inst_count: Number of instructions in the basic block
 //   bb_id: Unique identifier of the basic block (from IRBBLabelPass)
 //   threshold: Interval length for phase detection
-void nugget_bb_hook_(uint64_t inst_count, uint64_t bb_id, uint64_t threshold) {
+void nugget_bb_hook(uint64_t inst_count, uint64_t bb_id, uint64_t threshold) {
     // Stub implementation - does nothing in test
     // Production would: accumulate inst_count, record bb_id execution
     (void)inst_count;
