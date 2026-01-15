@@ -10,6 +10,8 @@ This repository contains three main LLVM passes:
 - **PhaseAnalysisPass**: Instruments basic blocks for runtime phase detection and analysis
 - **PhaseBoundPass**: Marks specific program phases (warmup/start/end) for ROI-based analysis
 
+**Tested with the Ubuntu 24.04 packaged LLVM-18 (x86_64 and aarch64) and the latest GitHub LLVM (1/15/2026)**
+
 ## Features
 
 - ✅ **Stable Basic Block IDs**: Metadata-based labeling survives optimizations
@@ -368,25 +370,32 @@ opt -load-pass-plugin=./build/NuggetPasses.so \
     -passes="ir-bb-label-pass<output_csv=benchmark_bbs.csv>" \
     benchmark.ll -o labeled.bc
 
-# 3. Examine CSV to choose marker BBs
-# Suppose: BB 42 is the main loop body
-
-# 4. Apply phase bound instrumentation
-opt -load-pass-plugin=./build/NuggetPasses.so \
-    -passes="phase-bound-pass<warmup_marker_bb_id=42;warmup_marker_count=1000;start_marker_bb_id=42;start_marker_count=100;end_marker_bb_id=42;end_marker_count=1000>" \
-    labeled.bc -o roi_instrumented.bc
-
-# 5. Apply phase analysis instrumentation
+# 3. Apply phase analysis instrumentation
 opt -load-pass-plugin=./build/NuggetPasses.so \
     -passes="phase-analysis-pass<interval_length=100000>" \
-    roi_instrumented.bc -o fully_instrumented.bc
+    labeled.bc -o benchmark_analysis.bc
+
+# 4. Run the analysis, find the interval that you want to mark, and get the
+# marker information (the bb id, the number of executions it takes to get to
+# that point)
+llc -O2 -filetype=obj -relocation-model=pic benchmark_analysis.bc -o benchmark_analysis.o
+clang benchmark_analysis.o nugget_runtime.c -o benchmark_analysis
+./benchmark_analysis
+
+# 5. Apply phase bound instrumentation
+opt -load-pass-plugin=./build/NuggetPasses.so \
+    -passes="phase-bound-pass<warmup_marker_bb_id=42;warmup_marker_count=1000;start_marker_bb_id=42;start_marker_count=100;end_marker_bb_id=42;end_marker_count=1000>" \
+    labeled.bc -o sample_bound.bc
 
 # 6. Link with runtime and compile
-clang fully_instrumented.bc nugget_runtime.c -o benchmark_instrumented
+llc -O2 -filetype=obj -relocation-model=pic sample_bound.bc -o benchmark_sample_bound.o
+clang benchmark_sample_bound.o nugget_sample_runtime.c -o benchmark_sample_bound
+./benchmark_sample_bound
 
-# 7. Run instrumented program
-./benchmark_instrumented
-# Output: Phase vectors, ROI markers, profiling data, etc.
+# Optional, the metadata doesn't affect the executable alone so you can build the original benchmark with
+# the labeled.bc too
+llc -O2 -filetype=obj -relocation-model=pic labeled.bc -o original.o
+clang original.o nugget_placeholder_runtime.c -o original
 ```
 
 ---
@@ -576,13 +585,8 @@ Copyright (c) 2026 Zhantong Qiu. All rights reserved.
 
 If you use these passes in academic work, please cite:
 
-```bibtex
-@software{nugget_llvm_passes,
-  author = {Qiu, Zhantong},
-  title = {Nugget LLVM Passes: Basic Block Labeling and Phase Analysis},
-  year = {2026},
-  url = {https://github.com/studyztp/Nugget-LLVM-passes}
-}
+TBD
+
 ```
 
 ---
