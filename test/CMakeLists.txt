@@ -6,8 +6,18 @@ cmake_minimum_required(VERSION 3.20)
 project(NuggetPasses-AllTests)
 
 # User-provided locations
-set(LLVM_BIN_DIR "" CACHE PATH "Path to LLVM bin directory (clang, opt, etc.)")
-set(PASS_PLUGIN "" CACHE FILEPATH "Path to the NuggetPasses plugin (.so file)")
+# When called from parent build, NUGGET_FROM_PARENT_BUILD will be ON and
+# LLVM_BIN_DIR and PASS_PLUGIN will be set as normal variables.
+# When running standalone, user must provide them as cache variables.
+if(NOT NUGGET_FROM_PARENT_BUILD)
+  if(NOT PASS_PLUGIN)
+    set(PASS_PLUGIN "" CACHE FILEPATH "Path to the NuggetPasses plugin (.so file)")
+  endif()
+endif()
+
+if(NOT LLVM_BIN_DIR)
+    set(LLVM_BIN_DIR "" CACHE PATH "Path to LLVM bin directory (clang, opt, etc.)")
+endif()
 
 if(NOT LLVM_BIN_DIR)
     message(FATAL_ERROR "LLVM_BIN_DIR must be set. Use -DLLVM_BIN_DIR=/path/to/llvm/bin")
@@ -17,8 +27,12 @@ if(NOT PASS_PLUGIN)
     message(FATAL_ERROR "PASS_PLUGIN must be set. Use -DPASS_PLUGIN=/path/to/NuggetPasses.so")
 endif()
 
-if(NOT EXISTS ${PASS_PLUGIN})
-    message(FATAL_ERROR "Pass plugin not found at: ${PASS_PLUGIN}")
+# Only check plugin existence when running standalone (not from parent build)
+# During parent build, the plugin doesn't exist yet at configure time
+if(NOT NUGGET_FROM_PARENT_BUILD)
+  if(NOT EXISTS ${PASS_PLUGIN})
+      message(FATAL_ERROR "Pass plugin not found at: ${PASS_PLUGIN}")
+  endif()
 endif()
 
 # Switches to include/exclude individual suites

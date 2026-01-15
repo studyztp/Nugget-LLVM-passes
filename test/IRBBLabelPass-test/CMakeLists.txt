@@ -115,7 +115,7 @@ message(STATUS "FLANG: ${FLANG_EXECUTABLE}")
 message(STATUS "PASS PLUGIN: ${PASS_PLUGIN}")
 
 # Verify pass plugin exists before proceeding
-if(NOT EXISTS ${PASS_PLUGIN})
+if(NOT NUGGET_FROM_PARENT_BUILD AND NOT EXISTS ${PASS_PLUGIN})
     message(FATAL_ERROR "Pass plugin not found at: ${PASS_PLUGIN}")
 endif()
 

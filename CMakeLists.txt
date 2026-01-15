@@ -97,10 +97,10 @@ include(AddLLVM)
 # PARTIAL_SOURCES_INTENDED: Indicates some source files are intentionally
 # excluded (e.g., PhaseAnalysisPass.cpp is in tree but not built yet)
 add_llvm_pass_plugin(NuggetPasses
-  PluginRegistration.cpp
-  IRBBLabelPass.cpp
-  PhaseAnalysisPass.cpp
-  PhaseBoundPass.cpp
+  src/PluginRegistration.cpp
+  src/IRBBLabelPass.cpp
+  src/PhaseAnalysisPass.cpp
+  src/PhaseBoundPass.cpp
 )
 
 # ============================================================================
@@ -118,3 +118,35 @@ target_compile_definitions(NuggetPasses PRIVATE ${LLVM_DEFINITIONS})
 # C++ standard - Require C++17 (minimum for modern LLVM).
 # LLVM 16+ requires C++17, LLVM 18+ may require C++20.
 target_compile_features(NuggetPasses PRIVATE cxx_std_17)
+
+# ============================================================================
+# Testing Configuration
+# ============================================================================
+# Option to enable building and running tests
+option(ENABLE_TESTS "Build and run tests for Nugget passes" OFF)
+
+if(ENABLE_TESTS)
+  # User can optionally specify LLVM_BIN_DIR; if not set, derive from LLVM_DIR
+  if(NOT LLVM_BIN_DIR)
+    # If test is enabled, user must provide LLVM_BIN_DIR
+    message(FATAL_ERROR "LLVM_BIN_DIR must be set to build tests. Use -DLLVM_BIN_DIR=/path/to/llvm/bin")
+  endif()
+
+  message(STATUS "Tests enabled")
+  message(STATUS "LLVM_BIN_DIR (for tests): ${LLVM_BIN_DIR}")
+  message(STATUS "NuggetPasses plugin will be at: ${CMAKE_BINARY_DIR}/NuggetPasses.so")
+
+  # Enable CTest for this build
+  enable_testing()
+
+  # Set variables that test/CMakeLists.txt expects
+  # Use CACHE INTERNAL FORCE to ensure they propagate to all subdirectories
+  set(PASS_PLUGIN "${CMAKE_BINARY_DIR}/NuggetPasses.so" CACHE INTERNAL "Path to NuggetPasses plugin" FORCE)
+  set(LLVM_BIN_DIR "${LLVM_BIN_DIR}" CACHE INTERNAL "Path to LLVM bin directory" FORCE)
+  set(NUGGET_FROM_PARENT_BUILD ON CACHE INTERNAL "Built from parent" FORCE)
+
+  # Add the test subdirectory
+  add_subdirectory(test)
+else()
+  message(STATUS "Tests disabled. Enable with: -DENABLE_TESTS=ON")
+endif()
