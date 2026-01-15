@@ -115,6 +115,15 @@ endif()
 # Enable CTest framework for test execution
 enable_testing()
 
+# Prefixes used to avoid name collisions when multiple suites are included by
+# the aggregated top-level project. When built standalone, prefixes stay empty.
+set(NUGGET_TARGET_PREFIX "")
+set(NUGGET_TEST_PREFIX "")
+if(NUGGET_AGGREGATED_BUILD)
+    set(NUGGET_TARGET_PREFIX "PhaseAnalysisPass-")
+    set(NUGGET_TEST_PREFIX "PhaseAnalysisPass-")
+endif()
+
 # ============================================================================
 # Architecture Detection for Test 2
 # ============================================================================

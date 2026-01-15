@@ -137,19 +137,23 @@ add_custom_command(
 # ============================================================================
 # ALL: Build automatically with 'make' or 'cmake --build'
 # DEPENDS: Ensures all steps run in order
-add_custom_target(test1_simple_target ALL DEPENDS ${READABLE_LL})
+set(_target_prefix "${NUGGET_TARGET_PREFIX}")
+set(TEST1_TARGET_NAME "${_target_prefix}test1_simple_target")
+add_custom_target(${TEST1_TARGET_NAME} ALL DEPENDS ${READABLE_LL})
 
 # ============================================================================
 # Test 1.1: Verify CSV file exists
 # ============================================================================
 # Uses CMake's -E cat command to read file (fails if file doesn't exist)
 # PASS_REGULAR_EXPRESSION: Checks for correct CSV header
+set(_test_prefix "${NUGGET_TEST_PREFIX}")
+set(TEST1_CSV_EXISTS_NAME "${_test_prefix}test1_simple_csv_exists")
 add_test(
-    NAME test1_simple_csv_exists
+    NAME ${TEST1_CSV_EXISTS_NAME}
     COMMAND ${CMAKE_COMMAND} -E cat ${CSV_FILE}
     WORKING_DIRECTORY ${OUTPUT_DIR}
 )
-set_tests_properties(test1_simple_csv_exists PROPERTIES 
+set_tests_properties(${TEST1_CSV_EXISTS_NAME} PROPERTIES 
     PASS_REGULAR_EXPRESSION "FunctionName,FunctionID,BasicBlockName"
 )
 
@@ -158,14 +162,15 @@ set_tests_properties(test1_simple_csv_exists PROPERTIES
 # ============================================================================
 # Runs CMake script to validate CSV format and non-empty content
 # DEPENDS: Only runs if csv_exists test passes
+set(TEST1_CSV_CONTENT_NAME "${_test_prefix}test1_simple_csv_has_content")
 add_test(
-    NAME test1_simple_csv_has_content
+    NAME ${TEST1_CSV_CONTENT_NAME}
     COMMAND ${CMAKE_COMMAND} 
             -DCSV_FILE=${CSV_FILE}
             -P ${CMAKE_CURRENT_SOURCE_DIR}/../common/verify_csv.cmake
     WORKING_DIRECTORY ${OUTPUT_DIR}
 )
-set_tests_properties(test1_simple_csv_has_content PROPERTIES DEPENDS test1_simple_csv_exists)
+set_tests_properties(${TEST1_CSV_CONTENT_NAME} PROPERTIES DEPENDS ${TEST1_CSV_EXISTS_NAME})
 
 # ============================================================================
 # Test 1.3: Validate IR metadata matches CSV
@@ -175,11 +180,12 @@ set_tests_properties(test1_simple_csv_has_content PROPERTIES DEPENDS test1_simpl
 # Also validates that nugget helper functions (nugget_init_, nugget_roi_begin_,
 # nugget_roi_end_) are properly excluded from both CSV and IR metadata.
 # DEPENDS: Only runs if csv_has_content test passes
+set(TEST1_METADATA_NAME "${_test_prefix}test1_simple_metadata_validation")
 add_test(
-    NAME test1_simple_metadata_validation
+    NAME ${TEST1_METADATA_NAME}
     COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../common/verify_metadata.py 
             ${READABLE_LL} ${CSV_FILE}
     WORKING_DIRECTORY ${OUTPUT_DIR}
 )
-set_tests_properties(test1_simple_metadata_validation PROPERTIES 
-    DEPENDS test1_simple_csv_has_content)
+set_tests_properties(${TEST1_METADATA_NAME} PROPERTIES 
+    DEPENDS ${TEST1_CSV_CONTENT_NAME})

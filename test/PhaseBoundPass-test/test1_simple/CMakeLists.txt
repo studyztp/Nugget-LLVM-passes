@@ -2,57 +2,31 @@
 # Copyright (c) 2026 Zhantong Qiu
 # All rights reserved.
 #
-# Redistribution and use in source and binary forms, with or without
-# modification, are permitted provided that the following conditions are met:
+# Test 1: Simple PhaseBoundPass instrumentation test
 #
-# 1. Redistributions of source code must retain the above copyright notice, this
-#    list of conditions and the following disclaimer.
+# This test validates that PhaseBoundPass correctly:
+#   1. Inserts nugget_init call in nugget_roi_begin_ with marker counts
+#   2. Inserts warmup/start/end marker hooks at specified basic blocks
 #
-# 2. Redistributions in binary form must reproduce the above copyright notice,
-#    this list of conditions and the following disclaimer in the documentation
-#    and/or other materials provided with the distribution.
-#
-# 3. Neither the name of the copyright holder nor the names of its
-#    contributors may be used to endorse or promote products derived
-#    from this software without specific prior written permission.
-#
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#
-# Test 1: Simple PhaseAnalysisPass Instrumentation Test
-#
-# This test validates that PhaseAnalysisPass correctly instruments:
-#   1. nugget_init_ call inserted at the end of nugget_roi_begin_
-#   2. nugget_bb_hook_ calls inserted in all labeled basic blocks
-#
-# Compilation pipeline:
-#   1. Compile sources to LLVM IR (unoptimized)
-#   2. Link runtime and test program IR
-#   3. Apply -O2 optimizations using opt
-#   4. Run IRBBLabelPass to label all basic blocks
-#   5. Run PhaseAnalysisPass to instrument basic blocks
-#   6. Convert to readable IR for verification
-#
-# Tests registered:
-#   1. test1_simple_csv_exists - Verify CSV file was generated
-#   2. test1_simple_instrumentation_validation - Verify instrumentation
+# Test pipeline:
+#   1. Source -> clang -O0 -> IR
+#   2. IR -> opt -O2 -> Optimized IR
+#   3. Optimized IR -> IRBBLabelPass -> Labeled IR + CSV
+#   4. Labeled IR -> PhaseBoundPass -> Instrumented IR
+#   5. Verify instrumentation in IR
 
 cmake_minimum_required(VERSION 3.20)
 
-# ============================================================================
-# Test 1: Simple PhaseAnalysisPass Instrumentation
-# ============================================================================
-
-# Configuration - threshold for phase analysis
-set(PHASE_THRESHOLD 1000)
+# Configuration - marker basic block IDs and counts
+# Based on bb_info.csv: bb_ids 0-4 exist after optimization
+# bb_id 0: compute entry, bb_id 1: compute loop, bb_id 2: compute exit
+# bb_id 3: helper entry, bb_id 4: main entry
+set(WARMUP_MARKER_BB_ID 0)
+set(WARMUP_MARKER_COUNT 1)
+set(START_MARKER_BB_ID 2)
+set(START_MARKER_COUNT 1)
+set(END_MARKER_BB_ID 3)
+set(END_MARKER_COUNT 1)
 
 set(OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR})
 file(MAKE_DIRECTORY ${OUTPUT_DIR})
@@ -61,7 +35,7 @@ file(MAKE_DIRECTORY ${OUTPUT_DIR})
 set(TEST_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/test1_simple.c)
 set(RUNTIME_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/../common/nugget_runtime.c)
 
-# Intermediate files
+# Intermediate files - IR pipeline
 set(TEST_LL ${OUTPUT_DIR}/test1_simple.ll)
 set(RUNTIME_LL ${OUTPUT_DIR}/nugget_runtime.ll)
 set(LINKED_LL ${OUTPUT_DIR}/test1_linked.ll)
@@ -142,16 +116,17 @@ add_custom_command(
 )
 
 # ============================================================================
-# Step 6: Run PhaseAnalysisPass to instrument basic blocks
+# Step 6: Run PhaseBoundPass to instrument marker basic blocks
 # ============================================================================
 add_custom_command(
     OUTPUT ${INSTRUMENTED_BC}
     COMMAND ${OPT_EXECUTABLE} -load-pass-plugin=${PASS_PLUGIN}
-            -passes="phase-analysis-pass<interval_length=${PHASE_THRESHOLD}>"
+            "-passes=phase-bound-pass<warmup_marker_bb_id=${WARMUP_MARKER_BB_ID}$<SEMICOLON>warmup_marker_count=${WARMUP_MARKER_COUNT}$<SEMICOLON>start_marker_bb_id=${START_MARKER_BB_ID}$<SEMICOLON>start_marker_count=${START_MARKER_COUNT}$<SEMICOLON>end_marker_bb_id=${END_MARKER_BB_ID}$<SEMICOLON>end_marker_count=${END_MARKER_COUNT}>"
             ${LABELED_BC} -o ${INSTRUMENTED_BC}
     DEPENDS ${LABELED_BC} ${PASS_PLUGIN}
-    COMMENT "Running PhaseAnalysisPass to instrument basic blocks"
+    COMMENT "Running PhaseBoundPass to instrument marker basic blocks"
     WORKING_DIRECTORY ${OUTPUT_DIR}
+    VERBATIM
 )
 
 # ============================================================================
@@ -189,16 +164,16 @@ set_tests_properties(${TEST1_CSV_EXISTS_NAME} PROPERTIES
 )
 
 # ============================================================================
-# Test 1.2: Verify PhaseAnalysisPass instrumentation
+# Test 1.2: Verify instrumentation
 # ============================================================================
-# Checks:
-#   - nugget_init_ is called in nugget_roi_begin_ with correct BB count
-#   - All labeled BBs have nugget_bb_hook_ calls with correct arguments
 set(TEST1_INSTRUMENT_NAME "${_test_prefix}test1_simple_instrumentation_validation")
 add_test(
     NAME ${TEST1_INSTRUMENT_NAME}
     COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../common/verify_instrumentation.py
-            ${INSTRUMENTED_LL} ${CSV_FILE} ${PHASE_THRESHOLD}
+            ${INSTRUMENTED_LL} ${CSV_FILE}
+            ${WARMUP_MARKER_BB_ID} ${WARMUP_MARKER_COUNT}
+            ${START_MARKER_BB_ID} ${START_MARKER_COUNT}
+            ${END_MARKER_BB_ID} ${END_MARKER_COUNT}
     WORKING_DIRECTORY ${OUTPUT_DIR}
 )
 set_tests_properties(${TEST1_INSTRUMENT_NAME} PROPERTIES

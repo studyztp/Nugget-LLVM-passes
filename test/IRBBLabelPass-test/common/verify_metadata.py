@@ -67,7 +67,8 @@ from collections import defaultdict
 # These functions are used for simulator initialization and ROI bounding
 # and should NOT appear in the CSV output or have metadata attached.
 NUGGET_EXCLUDED_FUNCTIONS = {
-    'nugget_init_',
+    # Updated: init function uses non-underscore name now
+    'nugget_init',
     'nugget_roi_begin_',
     'nugget_roi_end_'
 }

@@ -122,6 +122,22 @@ extern "C" LLVM_ATTRIBUTE_WEAK PassPluginLibraryInfo llvmGetPassPluginInfo() {
                             return false;
                         }
                     }
+
+                    // Check if it's the PhaseBoundPass
+                    auto E3 = MatchParamPass(Name, "phase-bound-pass",
+                                                PhaseBoundPassOptions);
+                    if (E3) {
+                        MPM.addPass(PhaseBoundPass(*E3));
+                        return true;
+                    } else {
+                        std::string ErrorMsg = toString(E3.takeError());
+                        if (ErrorMsg.find("name not matched") 
+                                                == std::string::npos) {
+                            errs() << "phase-bound-pass param parse error: " 
+                                                        << ErrorMsg << "\n";
+                            return false;
+                        }
+                    }
                     // Pass name didn't match - let other plugins handle it
                     return false;
                 });
