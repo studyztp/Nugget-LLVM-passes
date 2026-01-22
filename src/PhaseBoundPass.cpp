@@ -137,13 +137,13 @@ bool PhaseBoundPass::labelMarkerBBs(Module &M,
     bool no_warmup_marker) {
 
     std::vector<std::pair<uint64_t, std::string>> markers_to_instrument = {
-        {start_marker_bb_id, "nugget_start_marker:\n"},
-        {end_marker_bb_id, "nugget_end_marker:\n"}
+        {start_marker_bb_id, "nugget_start_marker:\n\tnop\n"},
+        {end_marker_bb_id, "nugget_end_marker:\n\tnop\n"}
     };
     
     if (!no_warmup_marker) {
         markers_to_instrument.push_back(
-            {warmup_marker_bb_id, "nugget_warmup_marker:\n"});
+            {warmup_marker_bb_id, "nugget_warmup_marker:\n\tnop\n"});
     }
 
     // Find the basic blocks with the given bb_ids and instrument them
