@@ -75,6 +75,7 @@
 #include "llvm/IR/Function.h"      // Function representation
 #include "llvm/IR/Metadata.h"      // Metadata nodes for annotations
 #include "llvm/IR/IRBuilder.h"     // IR construction helper
+#include "llvm/IR/InlineAsm.h"      // Inline assembly support
 #include "llvm/IR/BasicBlock.h"    // Basic block representation
 #include "llvm/IR/PassManager.h"   // Pass manager infrastructure
 #include "llvm/IR/Instructions.h"  // Instruction classes

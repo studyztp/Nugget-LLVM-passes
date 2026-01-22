@@ -48,7 +48,9 @@ const std::vector<Options> PhaseBoundPassOptions = {
     {"end_marker_bb_id", ""},
     // Number of executions of the end marker basic block before the end
     // point is reached
-    {"end_marker_count", ""} 
+    {"end_marker_count", ""},
+    // If only labeling marker BBs without instrumentation
+    {"label_only", "false"},
 };
 
 class PhaseBoundPass : public PassInfoMixin<PhaseBoundPass> {
@@ -63,7 +65,13 @@ class PhaseBoundPass : public PassInfoMixin<PhaseBoundPass> {
     bool instrumentMarkerBBs(Module &M,
             const uint64_t warmup_marker_bb_id,
             const uint64_t start_marker_bb_id,
-            const uint64_t end_marker_bb_id);
+            const uint64_t end_marker_bb_id,
+            bool no_warmup_marker);
+    bool labelMarkerBBs(Module &M,
+          const uint64_t warmup_marker_bb_id,
+          const uint64_t start_marker_bb_id,
+          const uint64_t end_marker_bb_id,
+          bool no_warmup_marker);
   public:
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &);
 };

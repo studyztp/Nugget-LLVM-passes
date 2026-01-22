@@ -51,6 +51,7 @@ find_program(CLANGXX_EXECUTABLE clang++ PATHS ${LLVM_BIN_DIR} NO_DEFAULT_PATH RE
 find_program(OPT_EXECUTABLE opt PATHS ${LLVM_BIN_DIR} NO_DEFAULT_PATH REQUIRED)
 find_program(LLVM_DIS_EXECUTABLE llvm-dis PATHS ${LLVM_BIN_DIR} NO_DEFAULT_PATH REQUIRED)
 find_program(LLVM_LINK_EXECUTABLE llvm-link PATHS ${LLVM_BIN_DIR} NO_DEFAULT_PATH REQUIRED)
+find_program(LLVM_OBJDUMP_EXECUTABLE llvm-objdump PATHS ${LLVM_BIN_DIR} NO_DEFAULT_PATH REQUIRED)
 
 # Print configuration for verification
 message(STATUS "CLANG: ${CLANG_EXECUTABLE}")
@@ -58,6 +59,7 @@ message(STATUS "CLANG++: ${CLANGXX_EXECUTABLE}")
 message(STATUS "OPT: ${OPT_EXECUTABLE}")
 message(STATUS "LLVM-DIS: ${LLVM_DIS_EXECUTABLE}")
 message(STATUS "LLVM-LINK: ${LLVM_LINK_EXECUTABLE}")
+message(STATUS "LLVM-OBJDUMP: ${LLVM_OBJDUMP_EXECUTABLE}")
 message(STATUS "PASS PLUGIN: ${PASS_PLUGIN}")
 
 # Verify pass plugin exists before proceeding
@@ -84,3 +86,5 @@ endif()
 # Tests are built and registered automatically by subdirectory CMakeLists.
 
 add_subdirectory(test1_simple)         # Basic marker instrumentation test
+add_subdirectory(test_label_only)      # Label in disassembly test
+add_subdirectory(test_warmup_count_zero) # No Warmup marker test

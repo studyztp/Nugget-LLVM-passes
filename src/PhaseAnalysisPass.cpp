@@ -99,12 +99,18 @@ PreservedAnalyses PhaseAnalysisPass::run(Module &M, ModuleAnalysisManager &) {
 
   uint64_t threshold = std::stoull(GetOptionValue(options_, 
                                                           "interval_length"));
+  DEBUG_PRINT("PhaseAnalysisPass options:"
+      << "\n  interval_length: " << threshold
+  );
+
   if (!instrumentAllIRBasicBlocks(M, total_basic_block_count, 
                                                         threshold)) {
     report_fatal_error("Error instrumenting basic blocks");
   }
   assert(total_basic_block_count >= 1 && 
                 "There should be at least one basic block instrumented");
+  DEBUG_PRINT("Total basic blocks instrumented: " 
+                                                << total_basic_block_count);
   Value* total_bb_count_arg = ConstantInt::get(
         Type::getInt64Ty(C), total_basic_block_count);
   if (!instrumentRoiBegin(M, {total_bb_count_arg})) {

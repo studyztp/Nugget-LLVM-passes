@@ -29,14 +29,16 @@
 
 #include "PhaseBoundPass.hh"
 
+// Instrument the marker basic blocks with the corresponding marker functions
 bool PhaseBoundPass::instrumentMarkerBBs(Module &M,
         const uint64_t warmup_marker_bb_id,
         const uint64_t start_marker_bb_id,
-        const uint64_t end_marker_bb_id) {
+        const uint64_t end_marker_bb_id,
+        bool no_warmup_marker) {
     
     Function* warmup_marker_hook_function = M.getFunction(
                                         "nugget_warmup_marker_hook");
-    if (!warmup_marker_hook_function) {
+    if (!warmup_marker_hook_function && !no_warmup_marker) {
         errs() << "Function nugget_warmup_marker_hook not found\n";
         return false;
     }
@@ -54,10 +56,14 @@ bool PhaseBoundPass::instrumentMarkerBBs(Module &M,
     }
 
     std::vector<std::pair<uint64_t, Function*>> markers_to_instrument = {
-        {warmup_marker_bb_id, warmup_marker_hook_function},
         {start_marker_bb_id, start_marker_hook_function},
         {end_marker_bb_id, end_marker_hook_function}
     };
+    
+    if (!no_warmup_marker) {
+        markers_to_instrument.push_back(
+            {warmup_marker_bb_id, warmup_marker_hook_function});
+    }
 
     // Find the basic blocks with the given bb_ids and instrument them
     LLVMContext &Context = M.getContext();
@@ -123,6 +129,91 @@ bool PhaseBoundPass::instrumentMarkerBBs(Module &M,
     return false;
 }
 
+// Label the marker basic blocks with inline assembly markers
+bool PhaseBoundPass::labelMarkerBBs(Module &M,
+    const uint64_t warmup_marker_bb_id,
+    const uint64_t start_marker_bb_id,
+    const uint64_t end_marker_bb_id,
+    bool no_warmup_marker) {
+
+    std::vector<std::pair<uint64_t, std::string>> markers_to_instrument = {
+        {start_marker_bb_id, "nugget_start_marker:\n"},
+        {end_marker_bb_id, "nugget_end_marker:\n"}
+    };
+    
+    if (!no_warmup_marker) {
+        markers_to_instrument.push_back(
+            {warmup_marker_bb_id, "nugget_warmup_marker:\n"});
+    }
+
+    // Find the basic blocks with the given bb_ids and instrument them
+    LLVMContext &Context = M.getContext();
+    IRBuilder<> builder(Context);
+    int64_t bb_id = -1;
+    for (Function &F : M) {
+        if (F.isDeclaration()) continue;
+
+        if (std::find(nugget_functions.begin(), nugget_functions.end(),
+                      F.getName().str()) != nugget_functions.end()) {
+            continue;
+        }
+        
+        for (BasicBlock &BB : F) {
+            // Get the bb_id metadata
+            bb_id = -1;
+            Instruction *T = BB.getTerminator();
+            if (T) {
+                MDNode* bb_id_md = T->getMetadata(kBbIdKey);
+                if (!bb_id_md) {
+                    continue;
+                }
+                
+                // Cast operand to MDString and extract the value
+                MDString *bb_id_str = dyn_cast<MDString>(
+                                                    bb_id_md->getOperand(0));
+                if (!bb_id_str) {
+                    continue;
+                }
+                bb_id = std::stoll(bb_id_str->getString().str());
+            } else {
+                continue;
+            }
+            assert(bb_id != -1 && "bb_id should have been set from metadata");
+
+            for (const auto &marker : markers_to_instrument) {
+                if (bb_id == marker.first) {
+                    // Instrument this basic block with the corresponding hook
+                    builder.SetInsertPoint(T);
+                    auto *asmTy = FunctionType::get(builder.getVoidTy(), false);
+                    std::string constraints = "~{memory}";
+                    auto *ia = InlineAsm::get(asmTy, marker.second, constraints, /*hasSideEffects=*/true);
+                    builder.CreateCall(ia);
+                    markers_to_instrument.erase(
+                        std::remove_if(
+                            markers_to_instrument.begin(),
+                            markers_to_instrument.end(),
+                            [&](const std::pair<uint64_t, 
+                                    std::string> &m) {
+                                return m.first == bb_id;
+                            }),
+                        markers_to_instrument.end());
+                }
+            }
+
+            if (markers_to_instrument.empty()) {
+                return true; // All markers have been instrumented
+            }
+        }
+        if (markers_to_instrument.empty()) {
+            return true; // All markers have been instrumented
+        }
+    }
+
+    // If we reach here, some markers were not found
+    return false;
+
+}
+
 PreservedAnalyses PhaseBoundPass::run(Module &M,
                                       ModuleAnalysisManager &MAM) {
     LLVMContext &Context = M.getContext();
@@ -139,6 +230,17 @@ PreservedAnalyses PhaseBoundPass::run(Module &M,
         GetOptionValue(options_, "end_marker_bb_id"));
     uint64_t end_marker_count = std::stoull(
         GetOptionValue(options_, "end_marker_count"));
+    bool label_only =
+        GetOptionValue(options_, "label_only") == "true" ? true : false;
+    DEBUG_PRINT("PhaseBoundPass options:"
+        << "\n  warmup_marker_bb_id: " << warmup_marker_bb_id
+        << "\n  warmup_marker_count: " << warmup_marker_count
+        << "\n  start_marker_bb_id: " << start_marker_bb_id
+        << "\n  start_marker_count: " << start_marker_count
+        << "\n  end_marker_bb_id: " << end_marker_bb_id
+        << "\n  end_marker_count: " << end_marker_count
+        << "\n  label_only: " << (label_only ? "true" : "false")
+    );
 
     // Instrument the `nugget_init` function to `nugget_roi_begin_` with the
     // marker counts
@@ -155,8 +257,16 @@ PreservedAnalyses PhaseBoundPass::run(Module &M,
 
     // Instrument the marker basic blocks with the corresponding marker 
     // functions
+    if (label_only) {
+        if (!labelMarkerBBs(
+            M, warmup_marker_bb_id, start_marker_bb_id, end_marker_bb_id, warmup_marker_count == 0)) {
+            report_fatal_error("Error labeling marker basic blocks");
+        }
+        return PreservedAnalyses::all();
+    }
+    // Otherwise, instrument the marker BBs
     if (!instrumentMarkerBBs(
-            M, warmup_marker_bb_id, start_marker_bb_id, end_marker_bb_id)) {
+            M, warmup_marker_bb_id, start_marker_bb_id, end_marker_bb_id, warmup_marker_count == 0)) {
         report_fatal_error("Error instrumenting marker basic blocks");
     }
     return PreservedAnalyses::all();
