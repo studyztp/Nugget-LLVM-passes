@@ -140,7 +140,13 @@ endif()
 add_subdirectory(test1_simple)         # Basic C code
 add_subdirectory(test2_dynamic_lib)    # Dynamic libraries, edge cases
 add_subdirectory(test3_cpp_static)     # C++ features, name mangling
-add_subdirectory(test4_mixed)          # C++ and Fortran interoperability
+
+# Test 4 requires flang-new for Fortran compilation
+if(FLANG_EXECUTABLE)
+    add_subdirectory(test4_mixed)      # C++ and Fortran interoperability
+else()
+    message(STATUS "test4_mixed skipped: flang-new not found")
+endif()
 
 # Test 5 requires llc for binary generation
 if(LLC_EXECUTABLE)

@@ -1,6 +1,14 @@
 # Nugget LLVM Passes
 
+[![Daily LLVM Tip-of-Tree Test](https://github.com/studyztp/Nugget-LLVM-passes/actions/workflows/daily-llvm-test.yml/badge.svg)](https://github.com/studyztp/Nugget-LLVM-passes/actions/workflows/daily-llvm-test.yml)
+
 A collection of LLVM analysis and instrumentation passes for basic block labeling, phase analysis, and region-of-interest (ROI) boundary marking. These passes enable fine-grained program behavior analysis, performance phase detection, and targeted instrumentation for profiling and simulation tools.
+
+<!-- LLVM_TEST_RESULTS_START -->
+### Latest LLVM Tip-of-Tree Test Results
+
+> Results are updated daily by CI. Click the badge above or see the [workflow runs](https://github.com/studyztp/Nugget-LLVM-passes/actions/workflows/daily-llvm-test.yml) for details.
+<!-- LLVM_TEST_RESULTS_END -->
 
 ## Overview
 
@@ -10,7 +18,7 @@ This repository contains three main LLVM passes:
 - **PhaseAnalysisPass**: Instruments basic blocks for runtime phase detection and analysis
 - **PhaseBoundPass**: Marks specific program phases (warmup/start/end) for ROI-based analysis
 
-**Tested with the Ubuntu 24.04 packaged LLVM-18 (x86_64 and aarch64) and the latest GitHub LLVM (1/15/2026)**
+**Tested with the Ubuntu 24.04 packaged LLVM-18 (x86_64 and aarch64) and the latest GitHub LLVM (daily CI)**
 
 ## Features
 

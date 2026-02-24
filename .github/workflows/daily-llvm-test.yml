@@ -1,0 +1,128 @@
+name: Daily LLVM Tip-of-Tree Test
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Dependencies ──────────────────────────────────────────────────
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build python3 lld
+
+      # ── ccache ────────────────────────────────────────────────────────
+      - name: Set up ccache
+        uses: hendrikmuhs/ccache-action@v1
+        with:
+          max-size: 4G
+          key: llvm-build
+
+      # ── Clone LLVM ────────────────────────────────────────────────────
+      - name: Clone LLVM (shallow)
+        run: git clone --depth 1 https://github.com/llvm/llvm-project.git
+
+      - name: Record LLVM commit info
+        id: llvm-info
+        run: |
+          cd llvm-project
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "sha_short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          echo "date=$(git log -1 --format=%cd --date=short)" >> "$GITHUB_OUTPUT"
+
+      # ── Build LLVM + Clang + Flang ────────────────────────────────────
+      - name: Configure LLVM
+        run: |
+          cmake -G Ninja -S llvm-project/llvm -B llvm-project/build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DLLVM_ENABLE_PROJECTS="clang;mlir;flang" \
+            -DLLVM_TARGETS_TO_BUILD="X86" \
+            -DLLVM_BUILD_TOOLS=ON \
+            -DLLVM_INCLUDE_TESTS=OFF \
+            -DLLVM_INCLUDE_BENCHMARKS=OFF \
+            -DLLVM_INCLUDE_EXAMPLES=OFF \
+            -DLLVM_ENABLE_BINDINGS=OFF \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DLLVM_USE_LINKER=lld \
+            -DLLVM_PARALLEL_LINK_JOBS=2
+
+      - name: Build LLVM tools
+        run: |
+          cmake --build llvm-project/build -- \
+            opt clang llvm-dis llvm-link llc llvm-objdump flang-new
+
+      # ── Build Nugget passes ───────────────────────────────────────────
+      - name: Configure Nugget passes
+        run: |
+          cmake -S . -B build \
+            -DLLVM_DIR=${{ github.workspace }}/llvm-project/build/lib/cmake/llvm \
+            -DENABLE_TESTS=ON \
+            -DLLVM_BIN_DIR=${{ github.workspace }}/llvm-project/build/bin
+
+      - name: Build Nugget passes
+        run: cmake --build build
+
+      # ── Run tests ─────────────────────────────────────────────────────
+      - name: Run tests
+        id: tests
+        run: |
+          set +e
+          ctest --test-dir build --output-on-failure 2>&1 | tee test-output.txt
+          EXIT_CODE=${PIPESTATUS[0]}
+          set -e
+
+          # CTest summary line format:
+          #   "100% tests passed, 0 tests failed out of 41"
+          TOTAL=$(grep -oP '(?<=out of )\d+' test-output.txt | head -1)
+          FAILED=$(grep -oP '\d+(?= tests? failed)' test-output.txt | head -1)
+          TOTAL=${TOTAL:-0}
+          FAILED=${FAILED:-0}
+          PASSED=$((TOTAL - FAILED))
+
+          echo "total=$TOTAL"         >> "$GITHUB_OUTPUT"
+          echo "passed=$PASSED"       >> "$GITHUB_OUTPUT"
+          echo "failed=$FAILED"       >> "$GITHUB_OUTPUT"
+          echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
+
+          # Capture per-test result lines
+          grep -E '^\s*[0-9]+/[0-9]+ Test' test-output.txt > test-lines.txt || true
+
+          exit "$EXIT_CODE"
+
+      # ── Update README ─────────────────────────────────────────────────
+      - name: Update README with test results
+        if: always()
+        env:
+          LLVM_SHA: ${{ steps.llvm-info.outputs.sha_short }}
+          LLVM_FULL_SHA: ${{ steps.llvm-info.outputs.sha }}
+          LLVM_DATE: ${{ steps.llvm-info.outputs.date }}
+          TEST_PASSED: ${{ steps.tests.outputs.passed }}
+          TEST_FAILED: ${{ steps.tests.outputs.failed }}
+          TEST_TOTAL: ${{ steps.tests.outputs.total }}
+          TEST_EXIT: ${{ steps.tests.outputs.exit_code }}
+          GH_REPOSITORY: ${{ github.repository }}
+          GH_RUN_ID: ${{ github.run_id }}
+        run: |
+          python3 .github/workflows/update_readme_results.py
+
+      - name: Commit updated README
+        if: always()
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          git diff --cached --quiet && echo "No changes to commit" && exit 0
+          git commit -m "Update LLVM tip-of-tree test results [ci skip]"
+          git push
