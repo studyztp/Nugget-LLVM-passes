@@ -89,17 +89,18 @@ def parse_ir_metadata(ir_file):
         Each BB dict contains:
             - 'name': Basic block label (empty string for entry block)
             - 'id': Integer BB ID from metadata
+            - 'inst_count': Number of IR instructions in the basic block
             
         Example:
             {
                 'main': [
-                    {'name': '', 'id': 0},         # Entry block
-                    {'name': 'if.then', 'id': 1},
-                    {'name': 'if.else', 'id': 2},
-                    {'name': 'if.end', 'id': 3}
+                    {'name': '', 'id': 0, 'inst_count': 5},
+                    {'name': 'if.then', 'id': 1, 'inst_count': 3},
+                    {'name': 'if.else', 'id': 2, 'inst_count': 2},
+                    {'name': 'if.end', 'id': 3, 'inst_count': 1}
                 ],
                 '_ZN10Calculator3addEi': [  # Mangled C++ name
-                    {'name': '', 'id': 4}
+                    {'name': '', 'id': 4, 'inst_count': 8}
                 ]
             }
     
@@ -129,6 +130,7 @@ def parse_ir_metadata(ir_file):
     current_bb_name = ''  # Entry block has no label
     in_function = False
     bb_started = False  # Track when we're inside a basic block
+    bb_inst_count = 0    # Count instructions in current basic block
     
     lines = content.split('\n')
     for i, line in enumerate(lines):
@@ -147,6 +149,7 @@ def parse_ir_metadata(ir_file):
             in_function = True
             bb_started = True  # Function entry is the first BB
             current_bb_name = ''  # Entry block has no explicit label
+            bb_inst_count = 0
             continue
         
         # Check if we've exited the function
@@ -154,6 +157,7 @@ def parse_ir_metadata(ir_file):
             in_function = False
             current_func = None
             bb_started = False
+            bb_inst_count = 0
             continue
         
         if not in_function:
@@ -171,7 +175,18 @@ def parse_ir_metadata(ir_file):
             else:
                 current_bb_name = bb_label
             bb_started = True
+            bb_inst_count = 0
             continue
+        
+        # Count IR instructions: indented non-empty lines that are not
+        # purely comments, labels, or continuation lines.
+        # Some LLVM IR instructions span multiple lines in textual form:
+        #   - `invoke`: continuation line starts with `to label` / `unwind label`
+        #   - `landingpad`: clause lines start with `catch`, `cleanup`, or `filter`
+        stripped = line.strip()
+        if bb_started and stripped and not stripped.startswith(';'):
+            if not re.match(r'^(to label|unwind label|catch |cleanup|filter )', stripped):
+                bb_inst_count += 1
         
         # Match !bb.id metadata reference on terminator instructions
         # Examples: br i1 %cmp, label %if.then, label %if.else, !bb.id !6
@@ -185,10 +200,12 @@ def parse_ir_metadata(ir_file):
                     bb_id = metadata_map[ref]
                     functions[current_func].append({
                         'name': current_bb_name,
-                        'id': int(bb_id)
+                        'id': int(bb_id),
+                        'inst_count': bb_inst_count
                     })
                     # Reset for next basic block
                     bb_started = False
+                    bb_inst_count = 0
     
     return functions
 
@@ -208,20 +225,21 @@ def parse_csv(csv_file):
             - 'name': Basic block name (empty string for entry blocks)
             - 'func_id': Function ID (integer)
             - 'bb_id': Basic block ID within function (integer)
+            - 'inst_count': Number of IR instructions (integer)
             
         Example:
             {
                 'main': [
-                    {'name': '', 'func_id': 0, 'bb_id': 0},
-                    {'name': 'if.then', 'func_id': 0, 'bb_id': 1}
+                    {'name': '', 'func_id': 0, 'bb_id': 0, 'inst_count': 5},
+                    {'name': 'if.then', 'func_id': 0, 'bb_id': 1, 'inst_count': 3}
                 ]
             }
     
     CSV format expected:
-        FunctionName,FunctionID,BasicBlockName,BasicBlockID
-        main,0,,0
-        main,0,if.then,1
-        main,0,if.else,2
+        FunctionName,FunctionID,BasicBlockName,BasicBlockInstCount,BasicBlockID
+        main,0,,5,0
+        main,0,if.then,3,1
+        main,0,if.else,2,2
         
     Note:
         - Empty BasicBlockName represents entry block
@@ -242,11 +260,13 @@ def parse_csv(csv_file):
             func_id = int(row['FunctionID'])
             bb_name = row['BasicBlockName']
             bb_id = int(row['BasicBlockID'])
+            inst_count = int(row['BasicBlockInstCount'])
             
             csv_data[func_name].append({
                 'name': bb_name,
                 'func_id': func_id,
-                'bb_id': bb_id
+                'bb_id': bb_id,
+                'inst_count': inst_count
             })
     
     return csv_data
@@ -261,12 +281,13 @@ def validate_metadata(ir_metadata, csv_data):
       - Basic block counts per function
       - Basic block IDs (must match exactly)
       - Basic block names (must match for named blocks, both empty for entry)
+      - Instruction counts (IR instruction count must match CSV)
     
     Args:
         ir_metadata: Dictionary from parse_ir_metadata()
-            Format: {func_name: [{'name': str, 'id': int}, ...]}
+            Format: {func_name: [{'name': str, 'id': int, 'inst_count': int}, ...]}
         csv_data: Dictionary from parse_csv()
-            Format: {func_name: [{'name': str, 'func_id': int, 'bb_id': int}, ...]}
+            Format: {func_name: [{'name': str, 'func_id': int, 'bb_id': int, 'inst_count': int}, ...]}
     
     Returns:
         Tuple (is_valid, error_messages):
@@ -376,6 +397,16 @@ def validate_metadata(ir_metadata, csv_data):
                     f"Function '{func_name}' BB ID {bb_id}: "
                     f"IR name='{ir_name}', CSV name='{csv_name}'"
                 )
+            
+            # Validate instruction counts match
+            if 'inst_count' in ir_bb and 'inst_count' in csv_bb:
+                ir_inst = ir_bb['inst_count']
+                csv_inst = csv_bb['inst_count']
+                if ir_inst != csv_inst:
+                    errors.append(
+                        f"Function '{func_name}' BB ID {bb_id}: "
+                        f"IR inst_count={ir_inst}, CSV inst_count={csv_inst}"
+                    )
     
     return len(errors) == 0, errors
 

@@ -190,7 +190,7 @@ Your runtime library must provide:
 // Called once at program ROI start
 void nugget_init(uint64_t total_bb_count);
 
-// Called before each basic block executes
+// Called at the end of each basic block (before the terminator)
 void nugget_bb_hook(uint64_t bb_size, uint64_t bb_id, uint64_t threshold);
 
 // Marker function for ROI begin (insert in your code)
@@ -410,7 +410,7 @@ The repository includes a comprehensive test suite for all passes. Tests validat
 - ✅ Runtime hook instrumentation (function calls inserted correctly)
 - ✅ ROI initialization at `nugget_roi_begin_`
 - ✅ Cross-language support (C, C++, Fortran)
-- ✅ Compatibility with optimization levels (-O0 through -O3)
+- ✅ Compatibility with optimization levels (-O0 and -O2)
 
 ### Running Tests
 
@@ -551,7 +551,7 @@ add_custom_command(
 
 ## Requirements and Compatibility
 
-- **LLVM Version**: Tested with LLVM 15+, should work with newer versions
+- **LLVM Version**: Requires LLVM 15+, tested with LLVM 18
 - **C++ Standard**: C++17 or later
 - **Platforms**: Linux, macOS (Windows untested but should work)
 - **Build System**: CMake 3.20 or later
@@ -588,8 +588,6 @@ Copyright (c) 2026 Zhantong Qiu. All rights reserved.
 If you use these passes in academic work, please cite:
 
 TBD
-
-```
 
 ---
 

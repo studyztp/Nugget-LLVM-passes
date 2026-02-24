@@ -72,11 +72,13 @@ def check_nugget_init_in_roi_begin(ir_content, warmup_count, start_count, end_co
     return errors
 
 
-def check_marker_hooks(ir_content, bb_info, warmup_bb_id, start_bb_id, end_bb_id):
+def check_marker_hooks(ir_content, bb_info, warmup_bb_id, warmup_count,
+                       start_bb_id, end_bb_id):
     """Check that marker hooks are inserted at the correct basic blocks.
 
     Parses !bb.id metadata to verify each hook is in the BB with the expected ID,
-    not merely present somewhere in the module.
+    not merely present somewhere in the module. When warmup_count is 0, the
+    warmup marker hook is expected to be absent.
     """
     errors = []
 
@@ -86,11 +88,13 @@ def check_marker_hooks(ir_content, bb_info, warmup_bb_id, start_bb_id, end_bb_id
         metadata_map[match.group(1)] = int(match.group(2))
 
     # Map each marker hook name to its expected bb_id
+    # Skip warmup marker when warmup_count is 0
     marker_hooks = {
-        'nugget_warmup_marker_hook': ('warmup', warmup_bb_id),
         'nugget_start_marker_hook': ('start', start_bb_id),
         'nugget_end_marker_hook': ('end', end_bb_id),
     }
+    if warmup_count > 0:
+        marker_hooks['nugget_warmup_marker_hook'] = ('warmup', warmup_bb_id)
 
     # Track which markers were found and at which bb_id
     found_markers = {name: None for name in marker_hooks}
@@ -207,7 +211,8 @@ def main():
     errors.extend(check_nugget_init_in_roi_begin(ir_content, warmup_count, start_count, end_count))
     
     # Check 2: Marker hooks are inserted
-    errors.extend(check_marker_hooks(ir_content, bb_info, warmup_bb_id, start_bb_id, end_bb_id))
+    errors.extend(check_marker_hooks(ir_content, bb_info, warmup_bb_id, warmup_count,
+                                     start_bb_id, end_bb_id))
     
     if errors:
         print("✗ Instrumentation validation FAILED")
@@ -217,7 +222,10 @@ def main():
     else:
         print("✓ Instrumentation validation PASSED")
         print(f"  - nugget_init called with counts ({warmup_count}, {start_count}, {end_count})")
-        print(f"  - warmup marker hook at BB {warmup_bb_id}")
+        if warmup_count > 0:
+            print(f"  - warmup marker hook at BB {warmup_bb_id}")
+        else:
+            print(f"  - warmup marker skipped (count=0)")
         print(f"  - start marker hook at BB {start_bb_id}")
         print(f"  - end marker hook at BB {end_bb_id}")
         sys.exit(0)

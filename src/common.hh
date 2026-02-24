@@ -306,7 +306,7 @@ static Expected<std::vector<Options>> MatchParamPass(StringRef Name,
 
 static bool instrumentRoiBegin(Module &M,
                               std::vector<Value*> args) {
-  // First, find the nugget_roi_begin_ function
+  // Insert nugget_init call at the end of nugget_roi_begin_ (before return)
   Function* roi_begin_function = M.getFunction("nugget_roi_begin_");
   if (!roi_begin_function) {
     errs() << "Function nugget_roi_begin_ not found\n";
@@ -317,7 +317,6 @@ static bool instrumentRoiBegin(Module &M,
     errs() << "Function nugget_init not found\n";
     return false;
   }
-  // Insert nugget_init call at the beginning of nugget_roi_begin_
   IRBuilder<> builder(M.getContext());
   builder.SetInsertPoint(roi_begin_function->back().getTerminator());
   builder.CreateCall(nugget_init_function, args);

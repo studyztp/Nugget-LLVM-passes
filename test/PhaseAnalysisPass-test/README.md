@@ -284,12 +284,12 @@ If you're targeting a different platform, you may need to extend the script with
 
 ## Adding New Tests
 
-1. Create a new directory: `test2_newfeature/`
-2. Add source file: `test2_newfeature.c`
+1. Create a new directory: `test4_newfeature/`
+2. Add source file: `test4_newfeature.c`
 3. Add CMakeLists.txt following the pattern from test1_simple
 4. Add the subdirectory in the main CMakeLists.txt:
    ```cmake
-   add_subdirectory(test2_newfeature)
+   add_subdirectory(test4_newfeature)
    ```
 
 ## License

@@ -48,7 +48,9 @@
 //   5. If match found, instantiates pass and adds to pipeline
 //
 // Currently registered passes:
-//   - ir-bb-label-pass: Basic block labeling and instrumentation
+//   - ir-bb-label-pass: Basic block labeling and CSV export
+//   - phase-analysis-pass: Phase detection instrumentation
+//   - phase-bound-pass: ROI marker instrumentation
 
 // Plugin entry point - provides plugin metadata and registration callbacks.
 //

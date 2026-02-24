@@ -87,5 +87,6 @@ endif()
 
 add_subdirectory(test1_simple)         # Basic marker instrumentation test
 add_subdirectory(test_label_only)      # Label in disassembly test
-add_subdirectory(test_warmup_count_zero) # No Warmup marker test
+add_subdirectory(test_warmup_count_zero) # No Warmup marker test (label_only mode)
+add_subdirectory(test_warmup_zero_instrumentation) # No Warmup marker test (instrumentation mode)
 add_subdirectory(test_invalid_bb_id)   # Negative: non-existent marker BB IDs

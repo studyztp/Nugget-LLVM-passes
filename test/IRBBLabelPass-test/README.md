@@ -19,13 +19,14 @@ cd build && ctest --output-on-failure
 
 This test suite validates the **IRBBLabelPass** LLVM plugin, which labels all basic blocks with unique metadata IDs and exports them to CSV format.
 
-The suite includes 6 comprehensive test cases covering:
+The suite includes 7 comprehensive test cases covering:
 - **Test 1**: Simple C code with basic functions
 - **Test 2**: Dynamic library dependencies and external calls
 - **Test 3**: C++ language features (templates, overloading, lambdas)
 - **Test 4**: Multi-language interoperability (C++ + Fortran)
 - **Test 5**: Optimization pipeline comparison (direct vs pipelined)
 - **Test 6**: Custom parameter override for output filename
+- **Test 7**: Error handling and malformed parameter rejection
 
 ---
 
@@ -68,6 +69,12 @@ The suite includes 6 comprehensive test cases covering:
 - **Command**: `-passes="ir-bb-label-pass<output_csv=my_custom_bb_output.csv>"`
 - **Expected**: CSV created with custom filename instead of default
 - **Validates**: Pass correctly parses and applies custom parameters
+
+### Test 7: Error Handling
+**Purpose**: Validate malformed parameter rejection and missing required options
+- **Tests**: (1) Unknown option key rejected for `ir-bb-label-pass`, (2) Missing required `interval_length` rejected for `phase-analysis-pass`
+- **Expected**: `opt` exits with non-zero status for both cases
+- **Validates**: `ParseOptions` / `MatchParamPass` shared infrastructure correctly rejects invalid input
 
 ---
 

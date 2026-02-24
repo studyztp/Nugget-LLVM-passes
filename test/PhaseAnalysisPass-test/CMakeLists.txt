@@ -148,6 +148,8 @@ endif()
 
 add_subdirectory(test1_simple)         # Basic instrumentation test
 add_subdirectory(test3_no_label)      # Negative: no prior IRBBLabelPass
+add_subdirectory(test4_missing_runtime) # Negative: runtime functions not linked
+add_subdirectory(test5_pass_chaining) # Pass chaining in single opt invocation
 
 # Test 2 requires llc for machine code generation and supported architecture
 if(LLC_EXECUTABLE AND TEST2_SUPPORTED_ARCH)
