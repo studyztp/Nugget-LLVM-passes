@@ -148,6 +148,7 @@ if(LLC_EXECUTABLE)
 endif()
 
 add_subdirectory(test6_custom_output)  # Custom CSV filename
+add_subdirectory(test7_error_handling) # Malformed / unknown parameter rejection
 
 # ============================================================================
 

@@ -73,46 +73,100 @@ def check_nugget_init_in_roi_begin(ir_content, warmup_count, start_count, end_co
 
 
 def check_marker_hooks(ir_content, bb_info, warmup_bb_id, start_bb_id, end_bb_id):
-    """Check that marker hooks are inserted at the correct basic blocks."""
+    """Check that marker hooks are inserted at the correct basic blocks.
+
+    Parses !bb.id metadata to verify each hook is in the BB with the expected ID,
+    not merely present somewhere in the module.
+    """
     errors = []
-    
-    # Parse functions and their basic blocks
-    function_pattern = re.compile(
-        r'define\s+(?:dso_local\s+|internal\s+|linkonce_odr\s+)?[^@]*@([^\s(]+)\s*\([^)]*\)[^{]*\{(.*?)\n\}',
-        re.DOTALL
-    )
-    
-    # Track which markers we found
-    found_markers = {
-        'warmup': False,
-        'start': False,
-        'end': False
+
+    # Build metadata reference map: !N -> bb_id string
+    metadata_map = {}
+    for match in re.finditer(r'!(\d+)\s*=\s*!\{!"(\d+)"\}', ir_content):
+        metadata_map[match.group(1)] = int(match.group(2))
+
+    # Map each marker hook name to its expected bb_id
+    marker_hooks = {
+        'nugget_warmup_marker_hook': ('warmup', warmup_bb_id),
+        'nugget_start_marker_hook': ('start', start_bb_id),
+        'nugget_end_marker_hook': ('end', end_bb_id),
     }
-    
-    for func_match in function_pattern.finditer(ir_content):
-        func_name = func_match.group(1).strip('"')
-        func_body = func_match.group(2)
-        
-        # Skip nugget helper functions
-        if func_name.startswith('nugget_'):
+
+    # Track which markers were found and at which bb_id
+    found_markers = {name: None for name in marker_hooks}
+
+    # Walk through the IR line by line, tracking the current BB's !bb.id
+    in_function = False
+    current_func = None
+    # Accumulate lines per BB so we can find the !bb.id on the terminator
+    bb_lines = []
+    bb_id_for_block = None
+
+    func_pattern = re.compile(
+        r'define\s+(?:dso_local\s+|internal\s+|linkonce_odr\s+|available_externally\s+|private\s+)?'
+        r'.*?\s+@([^\s(]+)\s*\(')
+    bb_label_pattern = re.compile(r'^([a-zA-Z0-9_.$-]+):\s*(?:;.*)?$')
+
+    def flush_bb(lines, bb_id):
+        """Check accumulated BB lines for marker hooks; record their bb_id."""
+        for line in lines:
+            for hook_name in marker_hooks:
+                if re.search(rf'call\s+void\s+@{hook_name}\s*\(\s*\)', line):
+                    found_markers[hook_name] = bb_id
+
+    lines = ir_content.split('\n')
+    for line in lines:
+        # Detect function entry
+        fm = func_pattern.match(line)
+        if fm:
+            func_name = fm.group(1).strip('"')
+            if func_name.startswith('nugget_'):
+                in_function = False
+                continue
+            in_function = True
+            current_func = func_name
+            bb_lines = []
+            bb_id_for_block = None
             continue
-        
-        # Look for marker hooks
-        if re.search(r'call\s+void\s+@nugget_warmup_marker_hook\s*\(\s*\)', func_body):
-            found_markers['warmup'] = True
-        if re.search(r'call\s+void\s+@nugget_start_marker_hook\s*\(\s*\)', func_body):
-            found_markers['start'] = True
-        if re.search(r'call\s+void\s+@nugget_end_marker_hook\s*\(\s*\)', func_body):
-            found_markers['end'] = True
-    
-    # Check all markers were found
-    if not found_markers['warmup']:
-        errors.append(f"nugget_warmup_marker_hook not found (expected at BB {warmup_bb_id})")
-    if not found_markers['start']:
-        errors.append(f"nugget_start_marker_hook not found (expected at BB {start_bb_id})")
-    if not found_markers['end']:
-        errors.append(f"nugget_end_marker_hook not found (expected at BB {end_bb_id})")
-    
+
+        if not in_function:
+            continue
+
+        # Detect function exit
+        if line.strip() == '}':
+            flush_bb(bb_lines, bb_id_for_block)
+            in_function = False
+            bb_lines = []
+            bb_id_for_block = None
+            continue
+
+        # Detect new BB label -> flush previous BB
+        bm = bb_label_pattern.match(line)
+        if bm:
+            flush_bb(bb_lines, bb_id_for_block)
+            bb_lines = []
+            bb_id_for_block = None
+            continue
+
+        bb_lines.append(line)
+
+        # If this line has !bb.id, record the bb_id for the current block
+        md_ref = re.search(r'!bb\.id\s*!(\d+)', line)
+        if md_ref:
+            ref_num = md_ref.group(1)
+            if ref_num in metadata_map:
+                bb_id_for_block = metadata_map[ref_num]
+
+    # Validate each marker was found at the correct BB
+    for hook_name, (label, expected_bb_id) in marker_hooks.items():
+        actual_bb_id = found_markers[hook_name]
+        if actual_bb_id is None:
+            errors.append(f"{hook_name} not found (expected at BB {expected_bb_id})")
+        elif actual_bb_id != expected_bb_id:
+            errors.append(
+                f"{hook_name} found at BB {actual_bb_id}, "
+                f"expected at BB {expected_bb_id}")
+
     return errors
 
 

@@ -6,8 +6,6 @@ This folder contains the test suites for the Nugget LLVM passes. It provides sel
 - PhaseAnalysisPass-test: Instruments labeled BBs with `nugget_bb_hook` and checks `nugget_init` in ROI.
 - PhaseBoundPass-test: Instruments warmup/start/end markers and checks `nugget_init` in ROI.
 
-Note: Pipeline-test is a separate benchmark-style suite. Ignore it for now.
-
 ## Prerequisites
 - CMake ≥ 3.20
 - Python 3 (for verification scripts)
@@ -16,7 +14,7 @@ Note: Pipeline-test is a separate benchmark-style suite. Ignore it for now.
   - llvm-link (PhaseAnalysis/PhaseBound)
   - llc (optional; IRBBLabel test5 + PhaseAnalysis test2)
   - flang-new (optional; IRBBLabel test4)
-- Nugget passes plugin (shared library), e.g. `NuggetPasses.so` built from `llvm-nugget-passes/pass`.
+- Nugget passes plugin (shared library), e.g. `NuggetPasses.so` built from `Nugget-LLVM-passes/`.
 
 ## Quick Start (All Suites)
 Configure, build, and run all tests from this folder:
@@ -109,6 +107,7 @@ cmake --build llvm-nugget-passes/test/build --target PhaseBoundPass-test1_simple
   - `test4_mixed`: Mixed C++ + Fortran (requires `flang-new`).
   - `test5_optimization`: Compares pipelines, may use `llc`.
   - `test6_custom_output`: Custom CSV file name.
+  - `test7_error_handling`: Malformed / unknown parameter rejection (negative tests).
 - Outputs: CSV headers include `FunctionName, FunctionID, BasicBlockName, BasicBlockID, BasicBlockInstCount`.
 
 ### PhaseAnalysisPass-test
@@ -121,13 +120,17 @@ cmake --build llvm-nugget-passes/test/build --target PhaseBoundPass-test1_simple
 - Tests:
   - `test1_simple`: Checks `nugget_init` in `nugget_roi_begin_` and `nugget_bb_hook` calls.
   - `test2_machine_match`: Generates machine code and verifies IR↔machine mapping (requires `llc` and supported arch).
+  - `test3_no_label`: Negative test — runs PhaseAnalysisPass without prior IRBBLabelPass; expected to fail.
 - Arch support for test2: `x86_64` and `AArch64`.
 
 ### PhaseBoundPass-test
 - Purpose: Insert warmup/start/end hooks at specified BBs and validate them.
 - Pipeline mirrors PhaseAnalysis up to labeling; then runs `phase-bound-pass<...>` to place marker hooks.
 - Tests:
-  - `test1_simple`: Checks `nugget_init` args (marker counts) and presence of all marker hooks.
+  - `test1_simple`: Checks `nugget_init` args (marker counts) and correct placement of all marker hooks.
+  - `test_label_only`: Verifies `label_only=true` inserts inline assembly labels instead of hook calls.
+  - `test_warmup_count_zero`: Verifies `warmup_marker_count=0` skips the warmup marker (only 2 labels in binary).
+  - `test_invalid_bb_id`: Negative test — non-existent marker BB IDs cause the pass to fail.
 
 ## Troubleshooting
 - "add_custom_target cannot create target ... already exists":
@@ -144,5 +147,4 @@ cmake --build llvm-nugget-passes/test/build --target PhaseBoundPass-test1_simple
   - `test2_machine_match` runs only on `x86_64` or `AArch64` when `llc` is found.
 
 ## Notes
-- Pipeline-test is excluded from the aggregated build by design.
 - Keep `PASS_PLUGIN` in sync with the LLVM version used in `LLVM_BIN_DIR` to avoid ABI mismatches.

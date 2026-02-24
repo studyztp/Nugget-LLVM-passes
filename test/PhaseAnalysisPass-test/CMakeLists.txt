@@ -147,6 +147,7 @@ endif()
 # Tests are built and registered automatically by subdirectory CMakeLists.
 
 add_subdirectory(test1_simple)         # Basic instrumentation test
+add_subdirectory(test3_no_label)      # Negative: no prior IRBBLabelPass
 
 # Test 2 requires llc for machine code generation and supported architecture
 if(LLC_EXECUTABLE AND TEST2_SUPPORTED_ARCH)

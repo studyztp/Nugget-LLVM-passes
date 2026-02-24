@@ -33,15 +33,15 @@ The suite includes 6 comprehensive test cases covering:
 
 ### Test 1: Simple C Code
 **Purpose**: Validate basic pass functionality on simple C functions
-- **Source**: `fibonacci()`, `add()`, `multiply()` functions
-- **Expected**: CSV with labeled basic blocks, IR with `!bb.id` metadata
-- **Validates**: Pass correctly processes simple functions and control flow
+- **Source**: `add()`, `subtract()`, `main()` functions, plus nugget helper stubs (`nugget_init`, `nugget_roi_begin_`, `nugget_roi_end_`)
+- **Expected**: CSV with labeled basic blocks, IR with `!bb.id` metadata; nugget helper functions excluded from both
+- **Validates**: Pass correctly processes simple functions, control flow, and nugget function exclusion
 
 ### Test 2: Dynamic Library Calls
-**Purpose**: Validate pass with external library dependencies
-- **Source**: Functions calling math library (sin, cos, pow)
-- **Expected**: CSV and IR metadata with external symbols preserved
-- **Validates**: Pass handles external library calls without labeling in declaration
+**Purpose**: Validate pass with external library dependencies and edge cases
+- **Source**: `empty_function()`, `get_constant()`, `calculate_distance()` (uses `sqrt`), `process_string()` (dynamic allocation), `main()`
+- **Expected**: CSV and IR metadata with external symbols preserved; empty/trivial functions handled gracefully
+- **Validates**: Pass handles external library calls, empty functions, NULL checks, loops, and dynamic allocation
 
 ### Test 3: C++ Static Code
 **Purpose**: Test with C++ language features and name mangling
@@ -132,6 +132,8 @@ test/
 ├── test3_cpp_static/                       # C++ features test
 ├── test4_mixed/                            # Multi-language test
 ├── test5_optimization/                     # Optimization pipeline test
+├── test6_custom_output/                    # Custom CSV filename test
+├── test7_error_handling/                   # Malformed parameter rejection
 └── build/                                  # Generated outputs (per test)
 ```
 

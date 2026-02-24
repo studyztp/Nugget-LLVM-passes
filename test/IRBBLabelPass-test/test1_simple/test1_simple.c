@@ -38,12 +38,12 @@
 //   - Control flow with if/else branches
 //   - CSV output generation with correct function and BB metadata
 //   - IR metadata (!bb.id) insertion at appropriate terminator instructions
-//   - Nugget helper functions (nugget_init_, nugget_roi_begin_, nugget_roi_end_)
+//   - Nugget helper functions (nugget_init, nugget_roi_begin_, nugget_roi_end_)
 //     are correctly ignored and NOT included in the CSV output
 //
 // Expected behavior:
 //   - Pass should label all user functions (add, subtract, main)
-//   - Pass should SKIP nugget helper functions (nugget_init_, nugget_roi_begin_, 
+//   - Pass should SKIP nugget helper functions (nugget_init, nugget_roi_begin_, 
 //     nugget_roi_end_)
 //   - Each basic block should receive a unique ID
 //   - CSV should contain FunctionName, FunctionID, BasicBlockName, BasicBlockID
@@ -61,7 +61,7 @@
 // Nugget initialization function.
 // Called once at program start to initialize the Nugget runtime.
 // Should be ignored by IRBBLabelPass.
-void nugget_init_(void) {
+void nugget_init(void) {
   // Empty - this is a stub for testing that the pass ignores it
 }
 

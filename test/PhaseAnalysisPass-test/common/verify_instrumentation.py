@@ -112,9 +112,9 @@ def check_bb_hooks(ir_content, bb_info, expected_threshold):
     # Build expected bb_ids from CSV, ignoring helper/runtime functions that we
     # intentionally do not instrument (avoids false "missing" reports).
     helper_funcs = {
-        'nugget_init_', 'nugget_roi_begin_', 'nugget_roi_end_',
-        'nugget_bb_hook_', 'nugget_warmup_marker_hook_',
-        'nugget_start_marker_hook_', 'nugget_end_marker_hook_'
+        'nugget_init', 'nugget_roi_begin_', 'nugget_roi_end_',
+        'nugget_bb_hook', 'nugget_warmup_marker_hook',
+        'nugget_start_marker_hook', 'nugget_end_marker_hook'
     }
     expected_bb_ids = {
         bb['bb_id']

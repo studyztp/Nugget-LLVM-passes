@@ -22,10 +22,10 @@
 #include <stdio.h>
 
 /* External declarations for nugget runtime functions */
-extern void nugget_init_(uint64_t total_bb_count);
+extern void nugget_init(uint64_t total_bb_count);
 extern void nugget_roi_begin_(void);
 extern void nugget_roi_end_(void);
-extern void nugget_bb_hook_(uint64_t function_id, uint64_t bb_id, uint64_t interval_length);
+extern void nugget_bb_hook(uint64_t inst_count, uint64_t bb_id, uint64_t threshold);
 
 /* Prevent inlining to preserve function boundaries */
 __attribute__((noinline))

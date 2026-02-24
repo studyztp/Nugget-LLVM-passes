@@ -18,16 +18,24 @@ PhaseBoundPass-test/
 ├── common/
 │   ├── nugget_runtime.c         # Runtime stub functions
 │   └── verify_instrumentation.py # IR verification script
-└── test1_simple/
-    ├── CMakeLists.txt           # Test configuration
-    └── test1_simple.c           # Test source code
+├── test1_simple/
+│   ├── CMakeLists.txt           # Test configuration
+│   └── test1_simple.c           # Test source code
+├── test_label_only/
+│   ├── CMakeLists.txt           # label_only=true test
+│   └── README.md
+├── test_warmup_count_zero/
+│   ├── CMakeLists.txt           # warmup_marker_count=0 test
+│   └── README.md
+└── test_invalid_bb_id/
+    └── CMakeLists.txt           # Negative: non-existent marker BB IDs
 ```
 
 ## Tests
 
-### Test 1: Simple Marker Instrumentation
+### Test 1: Simple Marker Instrumentation (`test1_simple`)
 
-**Purpose**: Verify basic marker instrumentation in IR
+**Purpose**: Verify basic marker instrumentation in IR (default mode, `label_only=false`)
 
 **Pipeline**:
 1. Compile source to IR (`clang -O0`)
@@ -38,10 +46,28 @@ PhaseBoundPass-test/
 6. Verify instrumentation in IR
 
 **Checks**:
-- ✓ `nugget_init` called in `nugget_roi_begin_` with marker counts
-- ✓ `nugget_warmup_marker_hook` inserted at warmup marker BB
-- ✓ `nugget_start_marker_hook` inserted at start marker BB
-- ✓ `nugget_end_marker_hook` inserted at end marker BB
+- `nugget_init` called in `nugget_roi_begin_` with marker counts
+- `nugget_warmup_marker_hook` inserted at warmup marker BB
+- `nugget_start_marker_hook` inserted at start marker BB
+- `nugget_end_marker_hook` inserted at end marker BB
+
+### Test: Label-Only Mode (`test_label_only`)
+
+**Purpose**: Verify that `label_only=true` inserts inline assembly labels (`nugget_warmup_marker`, `nugget_start_marker`, `nugget_end_marker`) into the binary instead of hook function calls.
+
+**Checks**: Disassembly contains exactly 3 marker labels.
+
+### Test: Warmup Count Zero (`test_warmup_count_zero`)
+
+**Purpose**: Verify that when `warmup_marker_count=0`, the warmup marker is skipped and only 2 marker labels (start and end) appear in the binary.
+
+**Checks**: Disassembly contains exactly 2 marker labels.
+
+### Test: Invalid BB ID (`test_invalid_bb_id`)
+
+**Purpose**: Negative test verifying the pass fails gracefully when specified marker BB IDs do not exist in the module.
+
+**Checks**: `opt` exits with non-zero status (WILL_FAIL test).
 
 ## Building and Running
 
@@ -81,14 +107,29 @@ cat build/test1_simple/test1_instrumented.ll
 cat build/test1_simple/bb_info.csv
 ```
 
+## Pass Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `warmup_marker_bb_id` | *(required)* | Basic block ID for warmup marker |
+| `warmup_marker_count` | *(required)* | Execution count before warmup completes (0 to skip) |
+| `start_marker_bb_id` | *(required)* | Basic block ID for ROI start marker |
+| `start_marker_count` | *(required)* | Execution count before ROI starts |
+| `end_marker_bb_id` | *(required)* | Basic block ID for ROI end marker |
+| `end_marker_count` | *(required)* | Execution count before ROI ends |
+| `label_only` | `false` | If `true`, emit inline assembly labels instead of hook function calls |
+
 ## How Markers Work
 
 1. **IRBBLabelPass** assigns unique IDs to each basic block and outputs CSV
 2. User selects specific bb_ids for warmup/start/end markers by inspecting CSV
 3. **PhaseBoundPass** instruments those specific basic blocks:
-   - Inserts `nugget_warmup_marker_hook()` at warmup marker BB
-   - Inserts `nugget_start_marker_hook()` at start marker BB
-   - Inserts `nugget_end_marker_hook()` at end marker BB
+   - When `label_only=false` (default):
+     - Inserts `nugget_warmup_marker_hook()` at warmup marker BB
+     - Inserts `nugget_start_marker_hook()` at start marker BB
+     - Inserts `nugget_end_marker_hook()` at end marker BB
+   - When `label_only=true`:
+     - Inserts inline assembly labels (`nugget_warmup_marker:`, `nugget_start_marker:`, `nugget_end_marker:`) visible in the disassembly
    - Inserts `nugget_init(warmup_count, start_count, end_count)` in `nugget_roi_begin_`
 
 ## Choosing Marker Basic Blocks
@@ -112,7 +153,7 @@ Choose bb_ids that represent meaningful phase boundaries in your program.
 
 ## Expected Output
 
-**Successful test run:**
+**Successful test run (example for test1_simple):**
 ```
 Test project /path/to/build
     Start 1: test1_simple_csv_exists
@@ -122,6 +163,8 @@ Test project /path/to/build
 
 100% tests passed, 0 tests failed out of 2
 ```
+
+Additional tests from `test_label_only`, `test_warmup_count_zero`, and `test_invalid_bb_id` will also appear in the full CTest output.
 
 ## Troubleshooting
 

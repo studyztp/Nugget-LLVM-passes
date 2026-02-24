@@ -93,9 +93,8 @@ include(AddLLVM)
 # Source files:
 #   PluginRegistration.cpp: Plugin entry point and pass registration
 #   IRBBLabelPass.cpp: IRBBLabelPass implementation
-#
-# PARTIAL_SOURCES_INTENDED: Indicates some source files are intentionally
-# excluded (e.g., PhaseAnalysisPass.cpp is in tree but not built yet)
+#   PhaseAnalysisPass.cpp: PhaseAnalysisPass implementation
+#   PhaseBoundPass.cpp: PhaseBoundPass implementation
 add_llvm_pass_plugin(NuggetPasses
   src/PluginRegistration.cpp
   src/IRBBLabelPass.cpp

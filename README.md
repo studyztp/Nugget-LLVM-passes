@@ -274,16 +274,17 @@ clang instrumented.bc nugget_runtime.c -o program
 
 #### Parameters
 
-All parameters are **required**:
+All marker parameters are **required**:
 
-| Parameter | Description |
-|-----------|-------------|
-| `warmup_marker_bb_id` | Basic block ID for warmup marker |
-| `warmup_marker_count` | Number of executions before warmup completes |
-| `start_marker_bb_id` | Basic block ID for ROI start marker |
-| `start_marker_count` | Number of executions before ROI starts |
-| `end_marker_bb_id` | Basic block ID for ROI end marker |
-| `end_marker_count` | Number of executions before ROI ends |
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `warmup_marker_bb_id` | *(required)* | Basic block ID for warmup marker |
+| `warmup_marker_count` | *(required)* | Number of executions before warmup completes (0 to skip warmup) |
+| `start_marker_bb_id` | *(required)* | Basic block ID for ROI start marker |
+| `start_marker_count` | *(required)* | Number of executions before ROI starts |
+| `end_marker_bb_id` | *(required)* | Basic block ID for ROI end marker |
+| `end_marker_count` | *(required)* | Number of executions before ROI ends |
+| `label_only` | `false` | If `true`, insert inline assembly labels instead of hook function calls. Useful for binary analysis without runtime library linking. |
 
 **Note**: Use semicolons (`;`) to separate multiple parameters in the pass syntax.
 
@@ -473,7 +474,7 @@ See [test/README.md](test/README.md) for detailed test documentation and standal
 ## Project Structure
 
 ```
-llvm-nugget-passes/
+Nugget-LLVM-passes/
 ├── CMakeLists.txt              # Main build configuration
 ├── README.md                   # This file
 ├── LICENSE                     # BSD-3-Clause license
@@ -507,10 +508,11 @@ opt -load-pass-plugin=./build/NuggetPasses.so \
 ### Using with Clang Directly
 
 ```bash
-# Compile and apply passes in one step
-clang -O2 -fpass-plugin=./build/NuggetPasses.so \
-      -fpass-plugin-arg-NuggetPasses-pass=ir-bb-label-pass \
-      program.c -o program
+# Load the plugin via clang's -fpass-plugin flag.
+# Note: clang registers the plugin but does not expose a way to select
+# individual passes or pass parameters on the command line.  Use opt
+# for full control over pass ordering and parameterisation.
+clang -O2 -fpass-plugin=./build/NuggetPasses.so program.c -o program
 ```
 
 ### Debugging Pass Behavior
