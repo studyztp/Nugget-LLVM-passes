@@ -43,9 +43,8 @@ def parse_test_lines() -> str:
 
 
 def build_block() -> str:
-    llvm_sha = env("LLVM_SHA", "unknown")
+    llvm_ver = env("LLVM_VERSION", "unknown")
     llvm_full = env("LLVM_FULL_SHA", "")
-    llvm_date = env("LLVM_DATE", "unknown")
     passed = env("TEST_PASSED", "?")
     total = env("TEST_TOTAL", "?")
     exit_code = env("TEST_EXIT", "1")
@@ -60,11 +59,14 @@ def build_block() -> str:
     else:
         status = "\u274c failing"
 
-    commit_link = (
-        f"[`{llvm_sha}`](https://github.com/llvm/llvm-project/commit/{llvm_full})"
-        if llvm_full
-        else f"`{llvm_sha}`"
-    )
+    if llvm_full:
+        llvm_display = (
+            f"[`{llvm_ver}`]"
+            f"(https://github.com/llvm/llvm-project/commit/{llvm_full})"
+        )
+    else:
+        llvm_display = f"`{llvm_ver}`"
+
     run_link = (
         f"[View Run](https://github.com/{repo}/actions/runs/{run_id})"
         if run_id
@@ -80,8 +82,7 @@ def build_block() -> str:
         "| | |",
         "|---|---|",
         f"| **Status** | {status} |",
-        f"| **LLVM Commit** | {commit_link} |",
-        f"| **LLVM Date** | {llvm_date} |",
+        f"| **LLVM Version** | {llvm_display} |",
         f"| **Tests Passed** | {passed} / {total} |",
         f"| **Run Date** | {run_date} |",
         f"| **Workflow** | {run_link} |",

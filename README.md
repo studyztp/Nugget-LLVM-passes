@@ -7,23 +7,7 @@ A collection of LLVM analysis and instrumentation passes for basic block labelin
 <!-- LLVM_TEST_RESULTS_START -->
 ### Latest LLVM Tip-of-Tree Test Results
 
-| | |
-|---|---|
-| **Status** | ❌ failing |
-| **LLVM Commit** | [`e8d8f8cfc`](https://github.com/llvm/llvm-project/commit/e8d8f8cfccd68f780cf261d622445784980cdd26) |
-| **LLVM Date** | 2026-02-24 |
-| **Tests Passed** |  /  |
-| **Run Date** | 2026-02-24 |
-| **Workflow** | [View Run](https://github.com/studyztp/Nugget-LLVM-passes/actions/runs/22360775245) |
-
-<details>
-<summary>Per-test results (click to expand)</summary>
-
-| Test | Result |
-|------|--------|
-
-
-</details>
+> Results are updated daily by CI. Click the badge above or see the [workflow runs](https://github.com/studyztp/Nugget-LLVM-passes/actions/workflows/daily-llvm-test.yml) for details.
 <!-- LLVM_TEST_RESULTS_END -->
 
 ## Overview

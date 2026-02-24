@@ -11,65 +11,59 @@ permissions:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
 
-      # ── Dependencies ──────────────────────────────────────────────────
-      - name: Install build dependencies
+      # ── Install latest LLVM development snapshot from apt.llvm.org ───
+      - name: Add LLVM apt repository
         run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key \
+            | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc > /dev/null
+          CODENAME=$(lsb_release -sc)
+          echo "deb http://apt.llvm.org/${CODENAME}/ llvm-toolchain-${CODENAME} main" \
+            | sudo tee /etc/apt/sources.list.d/llvm-dev.list
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build python3 lld
 
-      # ── ccache ────────────────────────────────────────────────────────
-      - name: Set up ccache
-        uses: hendrikmuhs/ccache-action@v1
-        with:
-          max-size: 4G
-          key: llvm-build
+      - name: Detect latest LLVM version
+        id: llvm-ver
+        run: |
+          VER=$(apt-cache search '^clang-[0-9]+$' \
+                | grep -oP 'clang-\K[0-9]+' | sort -n | tail -1)
+          echo "ver=$VER" >> "$GITHUB_OUTPUT"
+          echo "Detected latest LLVM development version: $VER"
 
-      # ── Clone LLVM ────────────────────────────────────────────────────
-      - name: Clone LLVM (shallow)
-        run: git clone --depth 1 https://github.com/llvm/llvm-project.git
+      - name: Install LLVM packages
+        run: |
+          V=${{ steps.llvm-ver.outputs.ver }}
+          sudo apt-get install -y --no-install-recommends \
+            llvm-${V}-dev \
+            clang-${V} \
+            flang-${V} \
+            lld-${V} \
+            llvm-${V}-tools
 
-      - name: Record LLVM commit info
+      - name: Record LLVM version info
         id: llvm-info
         run: |
-          cd llvm-project
-          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-          echo "sha_short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
-          echo "date=$(git log -1 --format=%cd --date=short)" >> "$GITHUB_OUTPUT"
-
-      # ── Build LLVM + Clang + Flang ────────────────────────────────────
-      - name: Configure LLVM
-        run: |
-          cmake -G Ninja -S llvm-project/llvm -B llvm-project/build \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DLLVM_ENABLE_PROJECTS="clang;mlir;flang" \
-            -DLLVM_TARGETS_TO_BUILD="X86" \
-            -DLLVM_BUILD_TOOLS=ON \
-            -DLLVM_INCLUDE_TESTS=OFF \
-            -DLLVM_INCLUDE_BENCHMARKS=OFF \
-            -DLLVM_INCLUDE_EXAMPLES=OFF \
-            -DLLVM_ENABLE_BINDINGS=OFF \
-            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-            -DLLVM_USE_LINKER=lld \
-            -DLLVM_PARALLEL_LINK_JOBS=2
-
-      - name: Build LLVM tools
-        run: |
-          cmake --build llvm-project/build -- \
-            opt clang llvm-dis llvm-link llc llvm-objdump flang
+          V=${{ steps.llvm-ver.outputs.ver }}
+          # Get the full version string (e.g. "23.0.0git" for dev builds)
+          FULL_VER=$(/usr/lib/llvm-${V}/bin/llvm-config --version)
+          echo "ver=$V"            >> "$GITHUB_OUTPUT"
+          echo "full_ver=$FULL_VER" >> "$GITHUB_OUTPUT"
+          echo "LLVM ${V} (${FULL_VER}) installed"
+          echo "Binary dir: /usr/lib/llvm-${V}/bin"
+          ls /usr/lib/llvm-${V}/bin/ | head -20
 
       # ── Build Nugget passes ───────────────────────────────────────────
       - name: Configure Nugget passes
         run: |
+          V=${{ steps.llvm-ver.outputs.ver }}
           cmake -S . -B build \
-            -DLLVM_DIR=${{ github.workspace }}/llvm-project/build/lib/cmake/llvm \
+            -DLLVM_DIR=/usr/lib/llvm-${V}/lib/cmake/llvm \
             -DENABLE_TESTS=ON \
-            -DLLVM_BIN_DIR=${{ github.workspace }}/llvm-project/build/bin
+            -DLLVM_BIN_DIR=/usr/lib/llvm-${V}/bin
 
       - name: Build Nugget passes
         run: cmake --build build
@@ -105,9 +99,7 @@ jobs:
       - name: Update README with test results
         if: always()
         env:
-          LLVM_SHA: ${{ steps.llvm-info.outputs.sha_short }}
-          LLVM_FULL_SHA: ${{ steps.llvm-info.outputs.sha }}
-          LLVM_DATE: ${{ steps.llvm-info.outputs.date }}
+          LLVM_VERSION: ${{ steps.llvm-info.outputs.full_ver }}
           TEST_PASSED: ${{ steps.tests.outputs.passed }}
           TEST_FAILED: ${{ steps.tests.outputs.failed }}
           TEST_TOTAL: ${{ steps.tests.outputs.total }}
