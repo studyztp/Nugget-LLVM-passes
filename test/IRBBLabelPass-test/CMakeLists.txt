@@ -103,7 +103,7 @@ find_program(OPT_EXECUTABLE opt PATHS ${LLVM_BIN_DIR} NO_DEFAULT_PATH REQUIRED)
 # Optional tools (some tests only)
 find_program(LLVM_DIS_EXECUTABLE llvm-dis PATHS ${LLVM_BIN_DIR} NO_DEFAULT_PATH)  # Disassembler
 find_program(LLC_EXECUTABLE llc PATHS ${LLVM_BIN_DIR} NO_DEFAULT_PATH)             # Code generator
-find_program(FLANG_EXECUTABLE flang-new PATHS ${LLVM_BIN_DIR} NO_DEFAULT_PATH)    # Fortran compiler
+find_program(FLANG_EXECUTABLE NAMES flang flang-new PATHS ${LLVM_BIN_DIR} NO_DEFAULT_PATH)    # Fortran compiler
 
 # Print configuration for verification
 message(STATUS "CLANG: ${CLANG_EXECUTABLE}")

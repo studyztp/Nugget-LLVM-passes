@@ -61,7 +61,7 @@ jobs:
       - name: Build LLVM tools
         run: |
           cmake --build llvm-project/build -- \
-            opt clang llvm-dis llvm-link llc llvm-objdump flang-new
+            opt clang llvm-dis llvm-link llc llvm-objdump flang
 
       # ── Build Nugget passes ───────────────────────────────────────────
       - name: Configure Nugget passes
