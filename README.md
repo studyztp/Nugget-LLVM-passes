@@ -514,6 +514,14 @@ clang original.o -o original
 
 ---
 
+## CMake Integration with `nugget_util`
+
+The **[`nugget_util`](nugget_util/)** library provides CMake functions that automate the entire Nugget pipeline — compiling sources to LLVM IR, applying passes, merging runtime libraries, lowering to object files, and linking executables — making it easy to integrate Nugget into any CMake-based workload build flow.
+
+See the [`nugget_util` README](nugget_util/README.md) for full documentation, configurable variables, function reference, and usage examples.
+
+---
+
 ## Testing
 
 The repository includes a comprehensive test suite for all passes. Tests validate:
@@ -597,6 +605,8 @@ Nugget-LLVM-passes/
 │   ├── PhaseAnalysisPass.cpp/hh # Phase detection instrumentation
 │   ├── PhaseBoundPass.cpp/hh   # ROI marker instrumentation
 │   └── common.hh               # Shared utilities and definitions
+├── nugget_util/                # CMake utility library for build integration
+│   └── nugget-function.cmake   # Pipeline functions (see "CMake Integration" section)
 ├── build/                      # Build output directory (generated)
 │   └── NuggetPasses.so         # Compiled plugin
 └── test/                       # Test suites
@@ -650,15 +660,7 @@ opt -debug-pass-manager -load-pass-plugin=./build/NuggetPasses.so \
 	    $< -o $@
 ```
 
-**CMake:**
-```cmake
-add_custom_command(
-  OUTPUT instrumented.bc
-  COMMAND opt -load-pass-plugin=${NUGGET_PLUGIN}
-              -passes="ir-bb-label-pass" input.ll -o instrumented.bc
-  DEPENDS input.ll ${NUGGET_PLUGIN}
-)
-```
+**CMake:** For CMake-based projects, use the [`nugget_util`](nugget_util/) library instead of writing custom commands by hand. See the [`nugget_util` README](nugget_util/README.md) for full documentation and examples.
 
 ---
 
