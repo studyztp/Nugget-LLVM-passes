@@ -230,13 +230,20 @@ opt -load-pass-plugin=./build/NuggetPasses.so \
     -passes="ir-bb-label-pass" \
     input.ll -o labeled.bc
 
-# Step 2: Apply phase analysis instrumentation
+# Step 2: Compile runtime to bitcode and merge with labeled bitcode.
+# This must happen BEFORE phase-analysis-pass so the pass recognizes
+# runtime functions and does not instrument their basic blocks.
+clang -S -emit-llvm nugget_runtime.c -o nugget_runtime.ll
+llvm-link labeled.bc nugget_runtime.ll -o merged.bc
+
+# Step 3: Apply phase analysis instrumentation
 opt -load-pass-plugin=./build/NuggetPasses.so \
     -passes="phase-analysis-pass<interval_length=10000>" \
-    labeled.bc -o instrumented.bc
+    merged.bc -o instrumented.bc
 
-# Step 3: Link with runtime library and compile
-clang instrumented.bc nugget_runtime.c -o program
+# Step 4: Lower to object file and link (avoid uncontrolled optimizations / LTO)
+llc -O2 -filetype=obj -relocation-model=pic instrumented.bc -o program.o
+clang program.o -o program
 ```
 
 #### Parameters
@@ -288,10 +295,11 @@ void nugget_bb_hook(uint64_t bb_size, uint64_t bb_id, uint64_t threshold) {
 #### Expected Workflow
 
 1. **Label BBs** with IRBBLabelPass
-2. **Instrument** with PhaseAnalysisPass
-3. **Link** instrumented bitcode with runtime library
-4. **Run** program - hooks collect data automatically
-5. **Analyze** phase output (vectors, transition graphs, etc.)
+2. **Merge** runtime library bitcode into the labeled module (so the pass skips runtime functions)
+3. **Instrument** with PhaseAnalysisPass
+4. **Compile** to executable
+5. **Run** program - hooks collect data automatically
+6. **Analyze** phase output (vectors, transition graphs, etc.)
 
 ---
 
@@ -326,13 +334,20 @@ opt -load-pass-plugin=./build/NuggetPasses.so \
 # Step 2: Identify marker BB IDs from CSV
 # Example: BB 10 for warmup, BB 25 for start, BB 30 for end
 
-# Step 3: Apply phase bound instrumentation
+# Step 3: Compile runtime to bitcode and merge with labeled bitcode.
+# This must happen BEFORE phase-bound-pass so the pass recognizes
+# runtime functions and does not instrument their basic blocks.
+clang -S -emit-llvm nugget_runtime.c -o nugget_runtime.ll
+llvm-link labeled.bc nugget_runtime.ll -o merged.bc
+
+# Step 4: Apply phase bound instrumentation
 opt -load-pass-plugin=./build/NuggetPasses.so \
     -passes="phase-bound-pass<warmup_marker_bb_id=10;warmup_marker_count=1000;start_marker_bb_id=25;start_marker_count=100;end_marker_bb_id=30;end_marker_count=100>" \
-    labeled.bc -o instrumented.bc
+    merged.bc -o instrumented.bc
 
-# Step 4: Link and compile
-clang instrumented.bc nugget_runtime.c -o program
+# Step 5: Lower to object file and link (avoid uncontrolled optimizations / LTO)
+llc -O2 -filetype=obj -relocation-model=pic instrumented.bc -o program.o
+clang program.o -o program
 ```
 
 #### Parameters
@@ -434,32 +449,45 @@ opt -load-pass-plugin=./build/NuggetPasses.so \
     -passes="ir-bb-label-pass<output_csv=benchmark_bbs.csv>" \
     benchmark.ll -o labeled.bc
 
-# 3. Apply phase analysis instrumentation
+# 3. Compile runtime to bitcode and merge with labeled bitcode.
+#    This must happen AFTER the bbid pass but BEFORE phase-analysis-pass,
+#    so the pass recognizes runtime functions and skips instrumenting them.
+clang -S -emit-llvm nugget_runtime.c -o nugget_runtime.ll
+llvm-link labeled.bc nugget_runtime.ll -o merged.bc
+
+# 4. Apply phase analysis instrumentation
 opt -load-pass-plugin=./build/NuggetPasses.so \
     -passes="phase-analysis-pass<interval_length=100000>" \
-    labeled.bc -o benchmark_analysis.bc
+    merged.bc -o benchmark_analysis.bc
 
-# 4. Run the analysis, find the interval that you want to mark, and get the
-# marker information (the bb id, the number of executions it takes to get to
-# that point)
+# 5. Run the analysis, find the interval that you want to mark, and get the
+#    marker information (the bb id, the number of executions it takes to get to
+#    that point)
 llc -O2 -filetype=obj -relocation-model=pic benchmark_analysis.bc -o benchmark_analysis.o
-clang benchmark_analysis.o nugget_runtime.c -o benchmark_analysis
+clang benchmark_analysis.o -o benchmark_analysis
 ./benchmark_analysis
 
-# 5. Apply phase bound instrumentation
+# 6. Merge runtime for the bound pass (same merge step, fresh from labeled.bc)
+clang -S -emit-llvm nugget_sample_runtime.c -o nugget_sample_runtime.ll
+llvm-link labeled.bc nugget_sample_runtime.ll -o merged_bound.bc
+
+# 7. Apply phase bound instrumentation
 opt -load-pass-plugin=./build/NuggetPasses.so \
     -passes="phase-bound-pass<warmup_marker_bb_id=42;warmup_marker_count=1000;start_marker_bb_id=42;start_marker_count=100;end_marker_bb_id=42;end_marker_count=1000>" \
-    labeled.bc -o sample_bound.bc
+    merged_bound.bc -o sample_bound.bc
 
-# 6. Link with runtime and compile
+# 8. Compile to executable
 llc -O2 -filetype=obj -relocation-model=pic sample_bound.bc -o benchmark_sample_bound.o
-clang benchmark_sample_bound.o nugget_sample_runtime.c -o benchmark_sample_bound
+clang benchmark_sample_bound.o -o benchmark_sample_bound
 ./benchmark_sample_bound
 
-# Optional, the metadata doesn't affect the executable alone so you can build the original benchmark with
-# the labeled.bc too
-llc -O2 -filetype=obj -relocation-model=pic labeled.bc -o original.o
-clang original.o nugget_placeholder_runtime.c -o original
+# Optional: build the original benchmark from labeled.bc (metadata doesn't
+# affect the executable, but you still need to link a placeholder runtime
+# to satisfy the declared symbols)
+clang -S -emit-llvm nugget_placeholder_runtime.c -o nugget_placeholder_runtime.ll
+llvm-link labeled.bc nugget_placeholder_runtime.ll -o merged_placeholder.bc
+llc -O2 -filetype=obj -relocation-model=pic merged_placeholder.bc -o original.o
+clang original.o -o original
 ```
 
 ---
