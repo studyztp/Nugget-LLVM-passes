@@ -67,11 +67,12 @@ A collection of LLVM analysis and instrumentation passes for basic block labelin
 
 ## Overview
 
-This repository contains three main LLVM passes:
+This repository contains four main LLVM passes:
 
 - **IRBBLabelPass**: Labels IR basic blocks with unique identifiers and exports structural information
 - **PhaseAnalysisPass**: Instruments basic blocks for runtime phase detection and analysis
 - **PhaseBoundPass**: Marks specific program phases (warmup/start/end) for ROI-based analysis
+- **IRInfoDumpPass**: Dumps IR structural information (globals, allocas, CFG, instructions) to JSON
 
 **Tested with the Ubuntu 24.04 packaged LLVM-18 (x86_64 and aarch64) and the latest GitHub LLVM (daily CI)**
 
@@ -449,6 +450,104 @@ void nugget_end_marker_hook() {
 
 ---
 
+### 4. IRInfoDumpPass — IR Structural JSON Export
+
+**Purpose**: Exports IR-level structural information to a JSON file for downstream analysis, debugging, and tooling integration.
+
+**When to use**:
+- Building IR introspection/debugging tools that need machine-readable structure
+- Exporting function-level allocas and source variable mappings
+- Capturing CFG relationships (predecessor/successor BB IDs) and IR instruction text
+- Producing analyzable snapshots of labeled IR before later transformations
+
+#### How it works
+
+1. Iterates module globals and records type/size/linkage metadata
+2. Iterates non-declaration, non-runtime functions and collects:
+   - Stack allocations (`alloca`) with IR names, source names (from debug intrinsics), type, and byte size
+   - Basic block records with `!bb.id`, predecessors, successors, and instruction text
+3. Writes a single JSON document to `output_json`
+
+#### Prerequisite
+
+Run `IRBBLabelPass` first. `IRInfoDumpPass` reads `!bb.id` metadata from basic block terminators; without labeling, BB IDs may be unavailable (`-1`).
+
+#### Usage
+
+```bash
+# Step 1: Label BBs first (required for stable bb_id output)
+opt -load-pass-plugin=./build/NuggetPasses.so \
+    -passes="ir-bb-label-pass<output_csv=bb_info.csv>" \
+    input.ll -o labeled.bc
+
+# Step 2: Dump IR structure to JSON
+opt -load-pass-plugin=./build/NuggetPasses.so \
+    -passes="ir-info-dump-pass<output_json=ir_info.json>" \
+    labeled.bc -o /dev/null
+```
+
+#### Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `output_json` | `ir_info.json` | Output JSON filename for IR structural information |
+
+#### Output Format
+
+The generated JSON contains two top-level arrays:
+
+- `globals`: global variable metadata
+- `functions`: per-function allocas and basic blocks
+
+Example shape:
+
+```json
+{
+  "globals": [
+    {
+      "name": "g_counter",
+      "type": "i64",
+      "byte_size": 8,
+      "is_constant": false,
+      "linkage": "external"
+    }
+  ],
+  "functions": [
+    {
+      "name": "main",
+      "allocas": [
+        {
+          "ir_name": "i",
+          "src_name": "i",
+          "type": "i32",
+          "byte_size": 4
+        }
+      ],
+      "basic_blocks": [
+        {
+          "bb_id": 0,
+          "ir_name": "",
+          "predecessors": [],
+          "successors": [1, 2],
+          "instructions": [
+            "%i = alloca i32, align 4",
+            "br i1 %cond, label %if.then, label %if.else, !bb.id !2"
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+#### Notes
+
+- Functions declared but not defined are skipped.
+- Nugget runtime helper functions are skipped so the dump focuses on workload IR.
+- Accurate `src_name` mapping depends on debug intrinsics (`dbg.declare` / `dbg.value`) being present.
+
+---
+
 ## Complete Example Workflow
 
 Here's a complete example combining all three passes:
@@ -604,6 +703,7 @@ Nugget-LLVM-passes/
 │   ├── IRBBLabelPass.cpp/hh    # Basic block labeling pass
 │   ├── PhaseAnalysisPass.cpp/hh # Phase detection instrumentation
 │   ├── PhaseBoundPass.cpp/hh   # ROI marker instrumentation
+│   ├── IRInfoDumpPass.cpp/hh   # IR structural JSON export
 │   └── common.hh               # Shared utilities and definitions
 ├── nugget_util/                # CMake utility library for build integration
 │   └── nugget-function.cmake   # Pipeline functions (see "CMake Integration" section)

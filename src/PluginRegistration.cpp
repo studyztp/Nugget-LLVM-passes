@@ -31,6 +31,7 @@
 #include "IRBBLabelPass.hh"
 #include "PhaseAnalysisPass.hh"
 #include "PhaseBoundPass.hh"
+#include "IRInfoDumpPass.hh"
 
 //
 // Plugin registration and pass manager integration.
@@ -51,6 +52,7 @@
 //   - ir-bb-label-pass: Basic block labeling and CSV export
 //   - phase-analysis-pass: Phase detection instrumentation
 //   - phase-bound-pass: ROI marker instrumentation
+//   - ir-info-dump-pass: IR structural info dump to JSON
 
 // Plugin entry point - provides plugin metadata and registration callbacks.
 //
@@ -136,6 +138,21 @@ extern "C" LLVM_ATTRIBUTE_WEAK PassPluginLibraryInfo llvmGetPassPluginInfo() {
                         if (ErrorMsg.find("name not matched") 
                                                 == std::string::npos) {
                             errs() << "phase-bound-pass param parse error: " 
+                                                        << ErrorMsg << "\n";
+                            return false;
+                        }
+                    }
+                    // Check if it's the IRInfoDumpPass
+                    auto E4 = MatchParamPass(Name, "ir-info-dump-pass",
+                                                IRInfoDumpPassOptions);
+                    if (E4) {
+                        MPM.addPass(IRInfoDumpPass(*E4));
+                        return true;
+                    } else {
+                        std::string ErrorMsg = toString(E4.takeError());
+                        if (ErrorMsg.find("name not matched")
+                                                == std::string::npos) {
+                            errs() << "ir-info-dump-pass param parse error: "
                                                         << ErrorMsg << "\n";
                             return false;
                         }

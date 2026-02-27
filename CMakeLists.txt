@@ -100,6 +100,7 @@ add_llvm_pass_plugin(NuggetPasses
   src/IRBBLabelPass.cpp
   src/PhaseAnalysisPass.cpp
   src/PhaseBoundPass.cpp
+  src/IRInfoDumpPass.cpp
 )
 
 # ============================================================================
