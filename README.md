@@ -12,8 +12,8 @@ A collection of LLVM analysis and instrumentation passes for basic block labelin
 | **Status** | ❌ failing |
 | **LLVM Version** | `23.0.0` |
 | **Tests Passed** |  /  |
-| **Run Date** | 2026-06-09 |
-| **Workflow** | [View Run](https://github.com/studyztp/Nugget-LLVM-passes/actions/runs/27190764788) |
+| **Run Date** | 2026-06-10 |
+| **Workflow** | [View Run](https://github.com/studyztp/Nugget-LLVM-passes/actions/runs/27261141766) |
 
 <details>
 <summary>Per-test results (click to expand)</summary>
