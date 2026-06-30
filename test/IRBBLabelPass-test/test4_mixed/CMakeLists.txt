@@ -106,9 +106,17 @@ add_custom_command(
 )
 
 # Step 1b: Compile Fortran part to LLVM IR
+# Pass the intrinsic modules path (for iso_c_binding etc.) when detected, since
+# the flang driver in some LLVM packages does not locate it automatically.
+if(FLANG_INTRINSIC_MODULES_DIR)
+    set(FLANG_MODULE_FLAGS -fintrinsic-modules-path ${FLANG_INTRINSIC_MODULES_DIR})
+else()
+    set(FLANG_MODULE_FLAGS "")
+endif()
+
 add_custom_command(
     OUTPUT ${F90_LL_RAW}
-    COMMAND ${FLANG_EXECUTABLE} -O0 -S -emit-llvm 
+    COMMAND ${FLANG_EXECUTABLE} -O0 -S -emit-llvm ${FLANG_MODULE_FLAGS}
             ${F90_SOURCE} -o ${F90_LL_RAW}
     DEPENDS ${F90_SOURCE}
     COMMENT "Compiling Fortran part to LLVM IR"

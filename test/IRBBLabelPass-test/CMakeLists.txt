@@ -105,6 +105,20 @@ find_program(LLVM_DIS_EXECUTABLE llvm-dis PATHS ${LLVM_BIN_DIR} NO_DEFAULT_PATH)
 find_program(LLC_EXECUTABLE llc PATHS ${LLVM_BIN_DIR} NO_DEFAULT_PATH)             # Code generator
 find_program(FLANG_EXECUTABLE NAMES flang flang-new PATHS ${LLVM_BIN_DIR} NO_DEFAULT_PATH)    # Fortran compiler
 
+# Locate flang's intrinsic module files (iso_c_binding.mod, etc.). The driver
+# in the apt.llvm.org dev snapshots does not always find these automatically,
+# so we detect the directory and pass it via -fintrinsic-modules-path.
+if(FLANG_EXECUTABLE)
+    get_filename_component(_llvm_root ${LLVM_BIN_DIR} DIRECTORY)
+    find_path(FLANG_INTRINSIC_MODULES_DIR
+        NAMES iso_c_binding.mod
+        PATHS
+            ${_llvm_root}/include/flang
+            ${_llvm_root}/lib/flang/include
+            ${_llvm_root}/include
+        NO_DEFAULT_PATH)
+endif()
+
 # Print configuration for verification
 message(STATUS "CLANG: ${CLANG_EXECUTABLE}")
 message(STATUS "CLANG++: ${CLANGXX_EXECUTABLE}")
@@ -112,6 +126,7 @@ message(STATUS "OPT: ${OPT_EXECUTABLE}")
 message(STATUS "LLVM-DIS: ${LLVM_DIS_EXECUTABLE}")
 message(STATUS "LLC: ${LLC_EXECUTABLE}")
 message(STATUS "FLANG: ${FLANG_EXECUTABLE}")
+message(STATUS "FLANG INTRINSIC MODULES: ${FLANG_INTRINSIC_MODULES_DIR}")
 message(STATUS "PASS PLUGIN: ${PASS_PLUGIN}")
 
 # Verify pass plugin exists before proceeding
@@ -141,9 +156,12 @@ add_subdirectory(test1_simple)         # Basic C code
 add_subdirectory(test2_dynamic_lib)    # Dynamic libraries, edge cases
 add_subdirectory(test3_cpp_static)     # C++ features, name mangling
 
-# Test 4 requires flang-new for Fortran compilation
-if(FLANG_EXECUTABLE)
+# Test 4 requires flang-new for Fortran compilation, plus its intrinsic module
+# files (iso_c_binding, etc.). Skip rather than hard-fail if either is missing.
+if(FLANG_EXECUTABLE AND FLANG_INTRINSIC_MODULES_DIR)
     add_subdirectory(test4_mixed)      # C++ and Fortran interoperability
+elseif(FLANG_EXECUTABLE)
+    message(STATUS "test4_mixed skipped: flang intrinsic modules (iso_c_binding.mod) not found")
 else()
     message(STATUS "test4_mixed skipped: flang-new not found")
 endif()
