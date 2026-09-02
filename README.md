@@ -9,55 +9,18 @@ A collection of LLVM analysis and instrumentation passes for basic block labelin
 
 | | |
 |---|---|
-| **Status** | ✅ passing |
+| **Status** | ❌ failing |
 | **LLVM Version** | `24.0.0` |
-| **Tests Passed** | 38 / 38 |
-| **Run Date** | 2026-09-01 |
-| **Workflow** | [View Run](https://github.com/studyztp/Nugget-LLVM-passes/actions/runs/33502529850) |
+| **Tests Passed** |  /  |
+| **Run Date** | 2026-09-02 |
+| **Workflow** | [View Run](https://github.com/studyztp/Nugget-LLVM-passes/actions/runs/33622368386) |
 
 <details>
 <summary>Per-test results (click to expand)</summary>
 
 | Test | Result |
 |------|--------|
-| IRBBLabelPass-test1_simple_csv_exists | Passed |
-| IRBBLabelPass-test1_simple_csv_has_content | Passed |
-| IRBBLabelPass-test1_simple_metadata_validation | Passed |
-| test2_dynamic_lib_csv_exists | Passed |
-| test2_dynamic_lib_csv_has_content | Passed |
-| test2_dynamic_lib_metadata_validation | Passed |
-| test3_cpp_static_csv_exists | Passed |
-| test3_cpp_static_csv_has_content | Passed |
-| test3_cpp_static_metadata_validation | Passed |
-| test5_optimization_csv_exists | Passed |
-| test5_optimization_binaries_exist | Passed |
-| test5_direct_binary_runs | Passed |
-| test5_optimized_binary_runs | Passed |
-| test5_performance_comparison | Passed |
-| test5_passes_comparison | Passed |
-| test5_metadata_validation | Passed |
-| test6_custom_csv_exists | Passed |
-| test6_custom_csv_has_content | Passed |
-| test6_custom_metadata_validation | Passed |
-| IRBBLabelPass-test7_unknown_option | Passed |
-| IRBBLabelPass-test7_missing_required_option | Passed |
-| PhaseAnalysisPass-test1_simple_csv_exists | Passed |
-| PhaseAnalysisPass-test1_simple_instrumentation_validation | Passed |
-| PhaseAnalysisPass-test3_no_label_should_fail | Passed |
-| PhaseAnalysisPass-test4_missing_runtime_should_fail | Passed |
-| PhaseAnalysisPass-test5_pass_chaining_csv_exists | Passed |
-| PhaseAnalysisPass-test5_pass_chaining_instrumentation_validation | Passed |
-| test2_machine_match_csv_exists | Passed |
-| test2_machine_match_executable_exists | Passed |
-| test2_machine_match_runs | Passed |
-| test2_machine_match_verification | Passed |
-| PhaseBoundPass-test1_simple_csv_exists | Passed |
-| PhaseBoundPass-test1_simple_instrumentation_validation | Passed |
-| test_label_only_disasm_labels | Passed |
-| test_warmup_count_zero_disasm_labels | Passed |
-| PhaseBoundPass-test_warmup_zero_instr_csv_exists | Passed |
-| PhaseBoundPass-test_warmup_zero_instr_validation | Passed |
-| test_invalid_bb_id_should_fail | Passed |
+
 
 </details>
 <!-- LLVM_TEST_RESULTS_END -->
